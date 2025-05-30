@@ -25,6 +25,7 @@ $kafkaContainer = (docker-compose ps -q kafka)
 
 if ($kafkaContainer) {
     docker exec $kafkaContainer kafka-topics --create --topic raw-comments --bootstrap-server localhost:9092 --partitions 3 --replication-factor 1 --if-not-exists
+    docker exec $kafkaContainer kafka-topics --create --topic clean-comments --bootstrap-server localhost:9092 --partitions 3 --replication-factor 1 --if-not-exists
     docker exec $kafkaContainer kafka-topics --create --topic sentiment-results --bootstrap-server localhost:9092 --partitions 3 --replication-factor 1 --if-not-exists
 }
 

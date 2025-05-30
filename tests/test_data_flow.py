@@ -14,44 +14,49 @@ from config.config import KAFKA_BOOTSTRAP_SERVERS, RAW_COMMENTS_TOPIC
 
 
 def main():
-    """Send test comments to Kafka to verify the data flow"""
-
-    # Test comments with different sentiments
+    """Send test comments to Kafka to verify the data flow"""    # Test comments with different sentiments dan emoji
     test_comments = [
         {
-            "comment_id": "test_001",
-            "text": "This is an amazing stream! Love it! 😍",
-            "author": "TestUser1",
-            "timestamp": time.time(),
+            "timestamp": "2024-01-01T10:00:00Z",
+            "username": "TestUser1",
+            "comment": "This is an amazing stream! Love it! 😍💖✨",
             "video_id": "test_video_123",
+            "channel_name": "Test Channel"
         },
         {
-            "comment_id": "test_002",
-            "text": "This is terrible content, waste of time 😡",
-            "author": "TestUser2",
-            "timestamp": time.time(),
+            "timestamp": "2024-01-01T10:01:00Z",
+            "username": "TestUser2", 
+            "comment": "This is terrible content, waste of time 😡💀👎",
             "video_id": "test_video_123",
+            "channel_name": "Test Channel"
         },
         {
-            "comment_id": "test_003",
-            "text": "The content is okay, nothing special",
-            "author": "TestUser3",
-            "timestamp": time.time(),
+            "timestamp": "2024-01-01T10:02:00Z",
+            "username": "TestUser3",
+            "comment": "The content is okay, nothing special here really",
             "video_id": "test_video_123",
+            "channel_name": "Test Channel"
         },
         {
-            "comment_id": "test_004",
-            "text": "¡Excelente contenido! Me encanta mucho",
-            "author": "TestUser4",
-            "timestamp": time.time(),
+            "timestamp": "2024-01-01T10:03:00Z",
+            "username": "TestUser4",
+            "comment": "¡Excelente contenido! Me encanta mucho 🎉🔥❤️",
             "video_id": "test_video_123",
+            "channel_name": "Test Channel"
         },
         {
-            "comment_id": "test_005",
-            "text": "Sehr gut! Das ist fantastisch!",
-            "author": "TestUser5",
-            "timestamp": time.time(),
+            "timestamp": "2024-01-01T10:04:00Z",
+            "username": "TestUser5",
+            "comment": "Sehr gut! Das ist fantastisch! 👏🎊🌟",
             "video_id": "test_video_123",
+            "channel_name": "Test Channel"
+        },
+        {
+            "timestamp": "2024-01-01T10:05:00Z",
+            "username": "TestUser6",
+            "comment": "😂😂😂",  # Ini akan difilter karena setelah cleaning < 10 karakter
+            "video_id": "test_video_123",
+            "channel_name": "Test Channel"
         },
     ]
 
@@ -61,12 +66,11 @@ def main():
             value_serializer=lambda x: json.dumps(x).encode("utf-8"),
         )
 
-        print("🚀 Sending test comments to Kafka...")
-
+        print("🚀 Sending test comments to Kafka...")        
         for i, comment in enumerate(test_comments, 1):
             # Send to raw comments topic
             producer.send(RAW_COMMENTS_TOPIC, comment)
-            print(f"✅ Sent test comment {i}/5: {comment['text'][:50]}...")
+            print(f"✅ Sent test comment {i}/{len(test_comments)}: {comment['comment'][:50]}...")
             time.sleep(1)  # Small delay between messages
 
         producer.flush()

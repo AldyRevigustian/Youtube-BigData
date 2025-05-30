@@ -48,10 +48,10 @@ def check_system_status():
         
     except Exception as e:
         print(f"❌ Kafka: Connection failed - {e}")
-    
     print()
     print("🚀 ACTIVE SERVICES:")
     print("   📺 YouTube API: Fetching live comments")
+    print("   🧹 Comment Cleaner: Cleaning and filtering comments")
     print("   🧠 Sentiment Analyzer: Processing comments")
     print("   📄 Comment Summarizer: Generating summaries")
     print("   📊 Streamlit Dashboard: Real-time visualization")
@@ -62,12 +62,12 @@ def check_system_status():
     print("   Storm UI: http://localhost:8080")
     print("   Redis: localhost:6379")
     print("   Kafka: localhost:9092")
-    
     print()
     print("📋 SYSTEM ARCHITECTURE:")
     print("   YouTube API → Kafka → raw-comments-topic")
-    print("   ├─ Storm → Realtime Sentiment → Redis")
-    print("   └─ Kafka Streams → Tumbling Window (5 min) → Summary → Redis")
+    print("   ├─ Comment Cleaner → clean-comments-topic")
+    print("   ├─ Sentiment Analyzer → sentiment-results-topic → Redis")
+    print("   └─ Comment Summarizer → Tumbling Window (3 min) → Summary → Redis")
     print("   Dashboard ← Redis (Real-time visualization)")
 
 def show_recent_activity():

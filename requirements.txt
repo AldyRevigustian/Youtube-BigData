@@ -12,3 +12,4 @@ streamz==0.6.4
 plotly==5.17.0
 asyncio==3.4.3
 schedule==1.2.0
+emoji==2.8.0

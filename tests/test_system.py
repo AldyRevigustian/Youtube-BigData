@@ -26,15 +26,22 @@ def test_kafka_connection():
             bootstrap_servers=config.KAFKA_BOOTSTRAP_SERVERS,
             value_serializer=lambda v: json.dumps(v).encode('utf-8')
         )
-        
-        # Send test message
+          # Send test message to multiple topics
         test_message = {
             'test': True,
             'timestamp': time.time(),
             'message': 'Test message from system check'
         }
         
-        producer.send('test-topic', value=test_message)
+        # Test sending to all our topics
+        topics_to_test = ['test-topic', config.RAW_COMMENTS_TOPIC, config.CLEAN_COMMENTS_TOPIC]
+        for topic in topics_to_test:
+            try:
+                producer.send(topic, value=test_message)
+                print(f"   ✅ Topic {topic}: OK")
+            except Exception as e:
+                print(f"   ❌ Topic {topic}: {e}")
+        
         producer.flush()
         producer.close()
         
@@ -86,6 +93,24 @@ def test_gemini_api():
         print(f"❌ Gemini API test failed: {e}")
         return False
 
+def test_emoji_library():
+    """Test emoji library for comment cleaning"""
+    try:
+        import emoji
+        
+        # Test emoji removal
+        test_text = "This is a test with emojis! 😍💖✨🔥"
+        cleaned_text = emoji.replace_emoji(test_text, replace='')
+        
+        print(f"✅ Emoji library test successful")
+        print(f"   Original: {test_text}")
+        print(f"   Cleaned: {cleaned_text.strip()}")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Emoji library test failed: {e}")
+        return False
+
 def main():
     """Run all tests"""
     print("🧪 Running system tests...\n")
@@ -94,7 +119,8 @@ def main():
         ("Redis Connection", test_redis_connection),
         ("Kafka Connection", test_kafka_connection), 
         ("Sentiment Model", test_sentiment_model),
-        ("Gemini API", test_gemini_api)
+        ("Gemini API", test_gemini_api),
+        ("Emoji Library", test_emoji_library)
     ]
     
     results = []

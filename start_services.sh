@@ -21,6 +21,7 @@ sleep 30
 # Create Kafka topics
 echo "📡 Creating Kafka topics..."
 docker exec -it $(docker-compose ps -q kafka) kafka-topics --create --topic raw-comments --bootstrap-server localhost:9092 --partitions 3 --replication-factor 1
+docker exec -it $(docker-compose ps -q kafka) kafka-topics --create --topic clean-comments --bootstrap-server localhost:9092 --partitions 3 --replication-factor 1
 docker exec -it $(docker-compose ps -q kafka) kafka-topics --create --topic sentiment-results --bootstrap-server localhost:9092 --partitions 3 --replication-factor 1
 
 echo "✅ Infrastructure services started successfully!"

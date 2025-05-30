@@ -16,9 +16,9 @@ def start_services():
     
     # Get current directory (should be root)
     root_dir = os.path.dirname(os.path.abspath(__file__))
-    
     services = [
         ("YouTube API", os.path.join(root_dir, "ingestion", "youtube_api.py")),
+        ("Comment Cleaner", os.path.join(root_dir, "processing", "comment_cleaner.py")),
         ("Sentiment Analyzer", os.path.join(root_dir, "processing", "sentiment_analyzer.py")),
         ("Comment Summarizer", os.path.join(root_dir, "processing", "comment_summarizer.py")),
     ]

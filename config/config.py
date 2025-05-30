@@ -8,6 +8,7 @@ CHANNEL_NAME = "IShowSpeed"
 # Kafka Configuration
 KAFKA_BOOTSTRAP_SERVERS = 'localhost:9092'
 RAW_COMMENTS_TOPIC = 'raw-comments'
+CLEAN_COMMENTS_TOPIC = 'clean-comments'
 SENTIMENT_RESULTS_TOPIC = 'sentiment-results'
 
 # Redis Configuration

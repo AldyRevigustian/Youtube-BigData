@@ -30,10 +30,9 @@ class SentimentAnalyzer:
             db=config.REDIS_DB,
             decode_responses=True
         )
-        
-        # Initialize Kafka consumer and producer
+          # Initialize Kafka consumer and producer
         self.consumer = KafkaConsumer(
-            config.RAW_COMMENTS_TOPIC,
+            config.CLEAN_COMMENTS_TOPIC,
             bootstrap_servers=config.KAFKA_BOOTSTRAP_SERVERS,
             value_deserializer=lambda m: json.loads(m.decode('utf-8')),
             auto_offset_reset='latest',

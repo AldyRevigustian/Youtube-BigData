@@ -6,6 +6,7 @@ Real-time sentiment analysis dan comment summarization untuk YouTube live stream
 
 ```
 YouTube API → Kafka → raw-comments-topic
+├─ Comment Cleaner → clean-comments-topic
 ├─ Sentiment Analyzer → Redis Cache → Dashboard
 └─ Comment Summarizer (3 min window) → Redis Cache → Dashboard
 ```
@@ -25,6 +26,7 @@ BigData/
 │   └── youtube_api.py        # YouTube API data fetching
 ├── ⚙️ processing/             # Data processing modules
 │   ├── __init__.py
+│   ├── comment_cleaner.py    # Comment cleaning and filtering
 │   ├── sentiment_analyzer.py # Real-time sentiment analysis
 │   └── comment_summarizer.py # Batch comment summarization
 ├── 🛠️ scripts/               # Utility scripts
@@ -50,6 +52,7 @@ BigData/
 ## 🔧 Komponen
 
 - **YouTube API Ingestion**: Mengambil komentar live stream real-time
+- **Comment Cleaner**: Membersihkan emoji dan memfilter komentar pendek
 - **Sentiment Analysis**: Analisis sentimen menggunakan model `tabularisai/multilingual-sentiment-analysis`
 - **Comment Summarization**: Ringkasan komentar setiap 3 menit menggunakan Gemini API
 - **Real-time Dashboard**: Streamlit dashboard untuk visualisasi data
@@ -119,13 +122,16 @@ Buka 4 terminal terpisah dan jalankan:
 # Terminal 1 - YouTube Comment Ingestion
 python ingestion/youtube_api.py
 
-# Terminal 2 - Sentiment Analysis
+# Terminal 2 - Comment Cleaning
+python processing/comment_cleaner.py
+
+# Terminal 3 - Sentiment Analysis
 python processing/sentiment_analyzer.py
 
-# Terminal 3 - Comment Summarization
+# Terminal 4 - Comment Summarization
 python processing/comment_summarizer.py
 
-# Terminal 4 - Dashboard
+# Terminal 5 - Dashboard
 streamlit run dashboard/dashboard.py
 ```
 
@@ -244,6 +250,7 @@ BigData/
 
 ### Kafka Topics
 - `raw-comments`: Raw comments from YouTube API
+- `clean-comments`: Cleaned comments (emoji removed, filtered by length)
 - `sentiment-results`: Processed comments with sentiment analysis
 
 ### Redis Keys

@@ -28,6 +28,7 @@ $RootDir = Get-Location
 # Define services to start
 $Services = @(
     @{Name = "YouTube API"; Path = "ingestion\youtube_api.py"},
+    @{Name = "Comment Cleaner"; Path = "processing\comment_cleaner.py"},
     @{Name = "Sentiment Analyzer"; Path = "processing\sentiment_analyzer.py"},
     @{Name = "Comment Summarizer"; Path = "processing\comment_summarizer.py"}
 )
