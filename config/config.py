@@ -1,18 +1,18 @@
 import os
 
 # YouTube API Configuration
-YOUTUBE_API_KEY = 'AIzaSyA-nKO01fRryKtTyhpuLjrAFD1TRTjCVzg'
-VIDEO_ID = 'DHyGz0zILe0'
+YOUTUBE_API_KEY = "AIzaSyA-nKO01fRryKtTyhpuLjrAFD1TRTjCVzg"
+VIDEO_ID = "DHyGz0zILe0"
 CHANNEL_NAME = "IShowSpeed"
 
 # Kafka Configuration
-KAFKA_BOOTSTRAP_SERVERS = 'localhost:9092'
-RAW_COMMENTS_TOPIC = 'raw-comments'
-CLEAN_COMMENTS_TOPIC = 'clean-comments'
-SENTIMENT_RESULTS_TOPIC = 'sentiment-results'
+KAFKA_BOOTSTRAP_SERVERS = "localhost:9092"
+RAW_COMMENTS_TOPIC = "raw-comments"
+CLEAN_COMMENTS_TOPIC = "clean-comments"
+SENTIMENT_RESULTS_TOPIC = "sentiment-results"
 
 # Redis Configuration
-REDIS_HOST = 'localhost'
+REDIS_HOST = "localhost"
 REDIS_PORT = 6379
 REDIS_DB = 0
 

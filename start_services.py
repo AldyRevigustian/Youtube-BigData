@@ -5,6 +5,7 @@ import subprocess
 import platform
 import json
 from pathlib import Path
+
 DOCKER_COMPOSE_FILE = "docker-compose.yml"
 
 WAIT_TIME_SECONDS = 20
@@ -134,7 +135,6 @@ class ServiceManager:
             )
             return False
 
-        # Start services in detached mode
         success, stdout, stderr = self.run_command(f"{compose_cmd} up -d")
         if success:
             self.print_colored("✅ Docker services started successfully", Colors.GREEN)
@@ -153,9 +153,8 @@ class ServiceManager:
             f"⏳ Waiting {wait_time} seconds for services to start...", Colors.YELLOW
         )
 
-        # Show a simple progress indicator
         for i in range(wait_time):
-            if i % 5 == 0:  # Update every 5 seconds
+            if i % 5 == 0:
                 remaining = wait_time - i
                 self.print_colored(
                     f"   ⏰ {remaining} seconds remaining...", Colors.WHITE
@@ -165,7 +164,6 @@ class ServiceManager:
     def create_kafka_topics(self):
         self.print_colored("� Creating Kafka topics...", Colors.YELLOW)
 
-        # Get Kafka container ID
         success, container_id, stderr = self.run_command(
             "docker ps -q -f name=kafka", capture_output=True, timeout=10
         )
@@ -175,13 +173,10 @@ class ServiceManager:
             self.print_colored(
                 "ℹ️  This might be normal if using external Kafka", Colors.YELLOW
             )
-            return True  # Don't fail the entire startup for this
+            return True
 
-        container_id = container_id.strip().split("\n")[
-            0
-        ]  # Get first container if multiple
+        container_id = container_id.strip().split("\n")[0]
 
-        # Create topics from configuration
         for topic_config in KAFKA_TOPICS:
             topic_name = topic_config["name"]
             partitions = topic_config["partitions"]
@@ -218,7 +213,6 @@ class ServiceManager:
             ("Storm UI", "localhost:8080"),
         ]
 
-        # Check if containers are running
         success, stdout, stderr = self.run_command(
             "docker ps --format 'table {{.Names}}\t{{.Status}}'", capture_output=True
         )
@@ -247,7 +241,6 @@ class ServiceManager:
         if requirements_file.exists():
             self.print_colored("📋 Checking Python requirements...", Colors.YELLOW)
 
-            # Check if pip is available
             success, _, _ = self.run_command("pip --version", capture_output=True)
             if not success:
                 self.print_colored(
@@ -255,7 +248,6 @@ class ServiceManager:
                 )
                 return False
 
-            # Check if virtual environment is recommended
             in_venv = hasattr(sys, "real_prefix") or (
                 hasattr(sys, "base_prefix") and sys.base_prefix != sys.prefix
             )
@@ -290,18 +282,16 @@ class ServiceManager:
 
         self.wait_for_services(WAIT_TIME_SECONDS)
 
-        # Create Kafka topics
         self.create_kafka_topics()
 
-        # Check service health
         self.check_service_health()
 
-        # Print status and next steps
         self.print_colored(
             "\n✅ Infrastructure services started successfully!", Colors.GREEN
         )
         self.print_service_status()
         return True
+
 
 def main():
     try:

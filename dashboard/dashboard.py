@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 import time
 import sys
 import os
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import config
 import uuid
@@ -38,6 +39,7 @@ def safe_parse_timestamp(timestamp_str):
         st.error(f"Error parsing timestamp {timestamp_str}: {e}")
         return datetime.now()
 
+
 st.set_page_config(
     page_title="YouTube Live Stream Analytics",
     page_icon="📺",
@@ -56,7 +58,6 @@ class Dashboard:
         )
 
     def get_sentiment_counts(self):
-        """Get sentiment counts from Redis"""
         try:
             positive = int(
                 self.redis_client.get(f"{config.SENTIMENT_CACHE_KEY}:counts:positive")
@@ -77,9 +78,7 @@ class Dashboard:
             return {"positive": 0, "negative": 0, "neutral": 0}
 
     def get_recent_comments(self, limit=20):
-        """Get recent comments from Redis"""
         try:
-            # Get recent comment IDs from timeline
             comment_ids = self.redis_client.zrevrange(
                 f"{config.SENTIMENT_CACHE_KEY}:timeline", 0, limit - 1
             )
@@ -98,7 +97,6 @@ class Dashboard:
             return []
 
     def get_latest_summary(self):
-        """Get latest comment summary"""
         try:
             summary_data = self.redis_client.get(f"{config.SUMMARY_CACHE_KEY}:latest")
             if summary_data:
@@ -109,7 +107,6 @@ class Dashboard:
             return None
 
     def get_summary_history(self, limit=10):
-        """Get summary history"""
         try:
             summary_ids = self.redis_client.zrevrange(
                 f"{config.SUMMARY_CACHE_KEY}:timeline", 0, limit - 1
@@ -129,7 +126,6 @@ class Dashboard:
             return []
 
     def render_metrics(self):
-        """Render key metrics"""
         sentiment_counts = self.get_sentiment_counts()
         total_comments = sum(sentiment_counts.values())
 
@@ -172,14 +168,12 @@ class Dashboard:
             )
 
     def render_sentiment_chart(self):
-        """Render sentiment distribution chart"""
         sentiment_counts = self.get_sentiment_counts()
 
         if sum(sentiment_counts.values()) == 0:
             st.info("No sentiment data available yet")
             return
 
-        # Pie chart
         fig = px.pie(
             values=list(sentiment_counts.values()),
             names=list(sentiment_counts.keys()),
@@ -195,21 +189,17 @@ class Dashboard:
         st.plotly_chart(fig, use_container_width=True)
 
     def render_recent_comments(self):
-        """Render recent comments table"""
         comments = self.get_recent_comments()
 
         if not comments:
             st.info("No recent comments available")
             return
 
-        # Create DataFrame
         df = pd.DataFrame(comments)
 
-        # Format data for display
         df["timestamp"] = pd.to_datetime(df["timestamp"]).dt.strftime("%H:%M:%S")
         df["confidence"] = df["confidence"].round(3)
 
-        # Color code by sentiment
         def color_sentiment(val):
             if val == "positive":
                 return "background-color: #90EE90"
@@ -225,7 +215,6 @@ class Dashboard:
         st.dataframe(styled_df, use_container_width=True)
 
     def render_latest_summary(self):
-        """Render latest comment summary"""
         summary = self.get_latest_summary()
 
         if not summary:
@@ -234,7 +223,6 @@ class Dashboard:
 
         st.subheader("📋 Latest Summary")
 
-        # Summary info
         col1, col2 = st.columns(2)
         with col1:
             st.metric("Time Window", f"{config.SUMMARY_WINDOW_MINUTES} minutes")
@@ -246,8 +234,6 @@ class Dashboard:
             window_end = safe_parse_timestamp(summary["window_end"]).strftime("%H:%M")
             st.metric("Window", f"{window_start} - {window_end}")
 
-        # Summary text
-        # st.text_area("Summary", summary['summary'], height=150, disabled=True, key=f"latest_summary_{summary.get('window_start', datetime.now().isoformat())}")
         st.text_area(
             "Summary",
             summary["summary"],
@@ -256,7 +242,6 @@ class Dashboard:
             key=f"latest_summary_{uuid.uuid4()}",
         )
 
-        # Sentiment distribution for this window
         if "sentiment_distribution" in summary:
             st.subheader("Sentiment in This Window")
 
@@ -275,7 +260,6 @@ class Dashboard:
                 st.dataframe(df_sentiment, use_container_width=True)
 
     def render_summary_history(self):
-        """Render summary history"""
         summaries = self.get_summary_history()
 
         if not summaries:
@@ -290,39 +274,35 @@ class Dashboard:
                 f"({summary['total_comments']} comments)"
             ):
                 unique_key = f"historical_summary_{uuid.uuid4()}"
-                st.text_area("Summary", summary['summary'], height=150, disabled=True, key=unique_key)
-                # st.text_area(
-                #     f"Summary {i+1}",
-                #     summary["summary"],
-                #     height=100,
-                #     disabled=True,
-                #     key=f"historical_summary_{i}_{summary.get('timestamp', 'unknown')}",
-                # )
+                st.text_area(
+                    "Summary",
+                    summary["summary"],
+                    height=150,
+                    disabled=True,
+                    key=unique_key,
+                )
+
 
 def main():
-    # Title
+
     st.title("📺 YouTube Live Stream Analytics")
     st.markdown(f"**Channel:** {config.CHANNEL_NAME} | **Video ID:** {config.VIDEO_ID}")
 
-    # Initialize dashboard
     dashboard = Dashboard()
 
-    # Sidebar
     st.sidebar.title("⚙️ Settings")
     auto_refresh = st.sidebar.checkbox("Auto Refresh", value=True)
     refresh_interval = st.sidebar.slider("Refresh Interval (seconds)", 5, 60, 10)
 
-    # Auto refresh
     if auto_refresh:
         placeholder = st.empty()
 
         while True:
             with placeholder.container():
-                # Key metrics
+
                 st.header("📊 Real-time Metrics")
                 dashboard.render_metrics()
 
-                # Charts and data
                 col1, col2 = st.columns([1, 2])
 
                 with col1:
@@ -332,7 +312,6 @@ def main():
                     st.subheader("💬 Recent Comments")
                     dashboard.render_recent_comments()
 
-                # Summary section
                 st.header("📋 Comment Summaries")
 
                 tab1, tab2 = st.tabs(["Latest Summary", "Summary History"])
@@ -343,14 +322,13 @@ def main():
                 with tab2:
                     dashboard.render_summary_history()
 
-                # Status
                 st.sidebar.success(
                     f"Last updated: {datetime.now().strftime('%H:%M:%S')}"
                 )
 
             time.sleep(refresh_interval)
     else:
-        # Static render
+
         dashboard.render_metrics()
 
         col1, col2 = st.columns([1, 2])

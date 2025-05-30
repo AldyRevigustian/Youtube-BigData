@@ -104,6 +104,7 @@ class CommentCleaner:
             except Exception as e:
                 logger.error(f"Error processing comment: {e}")
 
+
 if __name__ == "__main__":
     cleaner = CommentCleaner()
     cleaner.process_comments()
