@@ -5,8 +5,8 @@ from kafka import KafkaConsumer, KafkaProducer
 from datetime import datetime
 import logging
 import config
+from dateutil.parser import parse as parse_date 
 
-# Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -103,22 +103,26 @@ class SentimentAnalyzer:
             except Exception as e:
                 logger.error(f"Error processing comment: {e}")
     
-    def cache_sentiment_result(self, data):
-        """Cache sentiment result in Redis"""
+    def parse_iso_timestamp(self, ts_str):
         try:
-            # Store individual result
-            key = f"{config.SENTIMENT_CACHE_KEY}:{data['id']}"
-            self.redis_client.setex(key, config.CACHE_EXPIRY_SECONDS, json.dumps(data))
-            
-            # Add to sorted set for time-based queries
-            timestamp = datetime.fromisoformat(data['timestamp'].replace('Z', '+00:00')).timestamp()
-            self.redis_client.zadd(f"{config.SENTIMENT_CACHE_KEY}:timeline", {data['id']: timestamp})
-            
-            # Update sentiment counters
-            sentiment_key = f"{config.SENTIMENT_CACHE_KEY}:counts:{data['sentiment']}"
-            self.redis_client.incr(sentiment_key)
-            self.redis_client.expire(sentiment_key, config.CACHE_EXPIRY_SECONDS)
-            
+            if ts_str.endswith('Z'):
+                ts_str = ts_str.replace('Z', '+00:00')
+            return parse_date(ts_str).timestamp()
+        except Exception as e:
+            logger.error(f"Error parsing timestamp '{ts_str}': {e}")
+            return datetime.now().timestamp()
+
+    def cache_sentiment_result(self, data):
+        try:
+          key = f"{config.SENTIMENT_CACHE_KEY}:{data['id']}"
+          self.redis_client.setex(key, config.CACHE_EXPIRY_SECONDS, json.dumps(data))
+
+          timestamp = self.parse_iso_timestamp(data['timestamp'])
+          self.redis_client.zadd(f"{config.SENTIMENT_CACHE_KEY}:timeline", {data['id']: timestamp})
+
+          sentiment_key = f"{config.SENTIMENT_CACHE_KEY}:counts:{data['sentiment']}"
+          self.redis_client.incr(sentiment_key)
+          self.redis_client.expire(sentiment_key, config.CACHE_EXPIRY_SECONDS)
         except Exception as e:
             logger.error(f"Error caching sentiment result: {e}")
 
