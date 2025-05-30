@@ -178,14 +178,19 @@ class Dashboard:
             values=list(sentiment_counts.values()),
             names=list(sentiment_counts.keys()),
             title="Sentiment Distribution",
+            color=list(sentiment_counts.keys()),
             color_discrete_map={
-                "positive": "#2E8B57",
-                "negative": "#DC143C",
-                "neutral": "#4682B4",
+                "positive": "#6BCB77",
+                "negative": "#FF6B6B",
+                "neutral": "#4D96FF",
             },
         )
 
-        fig.update_traces(textposition="inside", textinfo="percent+label")
+        fig.update_traces(
+            textposition="inside",
+            textinfo="percent+label",
+            textfont=dict(color="white"),
+        )
         st.plotly_chart(fig, use_container_width=True)
 
     def render_recent_comments(self):
@@ -202,11 +207,11 @@ class Dashboard:
 
         def color_sentiment(val):
             if val == "positive":
-                return "background-color: #90EE90"
+                return "background-color: #6BCB77"
             elif val == "negative":
-                return "background-color: #FFB6C1"
+                return "background-color: #FF6B6B"
             else:
-                return "background-color: #ADD8E6"
+                return "background-color: #4D96FF"
 
         styled_df = df[
             ["timestamp", "username", "comment", "sentiment", "confidence"]
@@ -284,7 +289,6 @@ class Dashboard:
 
 
 def main():
-
     st.title("📺 YouTube Live Stream Analytics")
     st.markdown(f"**Channel:** {config.CHANNEL_NAME} | **Video ID:** {config.VIDEO_ID}")
 
@@ -292,45 +296,35 @@ def main():
 
     st.sidebar.title("⚙️ Settings")
     auto_refresh = st.sidebar.checkbox("Auto Refresh", value=True)
-    refresh_interval = st.sidebar.slider("Refresh Interval (seconds)", 5, 60, 10)
+    refresh_interval = st.sidebar.slider("Refresh Interval (seconds)", 5, 60, 5)
+    sidebar_status = st.sidebar.empty()  # Tambahkan ini sebelum loop
 
     if auto_refresh:
         placeholder = st.empty()
-
         while True:
             with placeholder.container():
-
                 st.header("📊 Real-time Metrics")
                 dashboard.render_metrics()
-
                 col1, col2 = st.columns([1, 2])
-
                 with col1:
                     dashboard.render_sentiment_chart()
-
                 with col2:
                     st.subheader("💬 Recent Comments")
                     dashboard.render_recent_comments()
-
                 st.header("📋 Comment Summaries")
-
                 tab1, tab2 = st.tabs(["Latest Summary", "Summary History"])
-
                 with tab1:
                     dashboard.render_latest_summary()
-
                 with tab2:
                     dashboard.render_summary_history()
 
-                st.sidebar.success(
+                sidebar_status.success(
                     f"Last updated: {datetime.now().strftime('%H:%M:%S')}"
                 )
 
             time.sleep(refresh_interval)
     else:
-
         dashboard.render_metrics()
-
         col1, col2 = st.columns([1, 2])
 
         with col1:
@@ -339,14 +333,10 @@ def main():
         with col2:
             st.subheader("💬 Recent Comments")
             dashboard.render_recent_comments()
-
         st.header("📋 Comment Summaries")
-
         tab1, tab2 = st.tabs(["Latest Summary", "Summary History"])
-
         with tab1:
             dashboard.render_latest_summary()
-
         with tab2:
             dashboard.render_summary_history()
 
