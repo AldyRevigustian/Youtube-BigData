@@ -176,7 +176,7 @@ class CommentCleaner:
             logger.debug(f"Filtered bot comment from: {username}")
             return False
 
-        if len(cleaned_comment) < 5:
+        if len(cleaned_comment) < 10:
             return False
 
         if len(set(cleaned_comment.replace(" ", ""))) < 2:

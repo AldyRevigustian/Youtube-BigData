@@ -1,14 +1,17 @@
 # YouTube Live Stream Analytics
 
-Real-time sentiment analysis dan comment summarization untuk YouTube live streaming menggunakan Apache Kafka, Storm, Redis, dan Streamlit.
+Real-time sentiment analysis dan comment summarization untuk YouTube live streaming menggunakan Apache Kafka, Redis, dan Streamlit.
 
-## 🏗️ Arsitektur
+## 🏗️ Arsitektur Sistem
 
 ```
-YouTube API → Kafka → raw-comments-topic
-├─ Comment Cleaner → clean-comments-topic
-├─ Sentiment Analyzer → Redis Cache → Dashboard
-└─ Comment Summarizer (3 min window) → Redis Cache → Dashboard
+YouTube API → Kafka Producer → raw-comments-topic
+                     ↓
+            Comment Cleaner → clean-comments-topic
+                     ↓
+         ┌─ Sentiment Analyzer → Redis Cache ─┐
+         │                                    │→ Dashboard (Streamlit)
+         └─ Comment Summarizer (3 min) ───────┘
 ```
 
 ## 📁 Struktur Project
@@ -17,16 +20,16 @@ YouTube API → Kafka → raw-comments-topic
 BigData/
 ├── 📊 dashboard/              # Real-time visualization
 │   ├── __init__.py
-│   └── dashboard.py           # Streamlit dashboard
+│   └── dashboard.py           # Streamlit dashboard utama
 ├── 🔧 config/                 # Configuration files
 │   ├── __init__.py
-│   └── config.py             # System configuration
+│   └── config.py             # System configuration & API keys
 ├── 📥 ingestion/              # Data ingestion modules
 │   ├── __init__.py
 │   └── youtube_api.py        # YouTube API data fetching
 ├── ⚙️ processing/             # Data processing modules
 │   ├── __init__.py
-│   ├── comment_cleaner.py    # Comment cleaning and filtering
+│   ├── comment_cleaner.py    # Comment cleaning dan filtering
 │   ├── sentiment_analyzer.py # Real-time sentiment analysis
 │   └── comment_summarizer.py # Batch comment summarization
 ├── 🛠️ scripts/               # Utility scripts
@@ -36,373 +39,251 @@ BigData/
 ├── 🧪 tests/                  # Testing modules
 │   ├── __init__.py
 │   ├── test_system.py        # System component tests
-│   └── test_data_flow.py     # End-to-end data flow tests
+│   ├── test_data_flow.py     # End-to-end data flow tests
+│   └── test_comment_cleaner.py # Comment cleaner unit tests
 ├── ⚡ storm/                  # Apache Storm configuration
 │   └── conf/
 │       └── storm.yaml
 ├── 🐳 docker-compose.yml      # Infrastructure services
 ├── 📋 requirements.txt        # Python dependencies
-├── 🚀 start_system.py         # Main system launcher (Python)
-├── 🚀 start_system.ps1        # Main system launcher (PowerShell)
-├── 🧪 run_tests.py           # Test runner (Python)
-├── 🧪 run_tests.ps1          # Test runner (PowerShell)
-└── 📖 README.md              # This file
+├── 🚀 start_services.py       # Infrastructure services launcher
+├── 🚀 start_system.py         # Application services launcher
+├── 🧪 start_tests.py          # Test suite runner
+└── 📖 README.md              # This documentation
 ```
 
-## 🔧 Komponen
+## 🔧 Komponen Utama
 
-- **YouTube API Ingestion**: Mengambil komentar live stream real-time
-- **Comment Cleaner**: Membersihkan emoji dan memfilter komentar pendek
-- **Sentiment Analysis**: Analisis sentimen menggunakan model `tabularisai/multilingual-sentiment-analysis`
-- **Comment Summarization**: Ringkasan komentar setiap 3 menit menggunakan Gemini API
-- **Real-time Dashboard**: Streamlit dashboard untuk visualisasi data
+### 📥 **Data Ingestion**
+- **YouTube API Integration**: Real-time comment fetching dari live streams
+- **Kafka Producer**: Streaming data ke topics untuk processing
 
-## 🚀 Quick Start
+### ⚙️ **Data Processing**
+- **Comment Cleaner**: Pembersihan emoji, normalisasi text, filtering spam
+- **Sentiment Analyzer**: Analisis sentimen menggunakan model `tabularisai/multilingual-sentiment-analysis`
+- **Comment Summarizer**: Ringkasan batch setiap 3 menit menggunakan Google Gemini 2.0 Flash
+
+### 📊 **Data Storage & Caching**
+- **Redis Cache**: Real-time storage untuk hasil sentiment dan summaries
+- **Kafka Topics**: Stream processing untuk data flow
+
+### 🖥️ **Visualization**
+- **Streamlit Dashboard**: Real-time visualization dan monitoring
+- **Interactive Charts**: Sentiment distribution, timeline, live feed
+
+## 🚀 Quick Start Guide
 
 ### 1. Prerequisites
 
+```bash
+# Required Software
 - Docker & Docker Compose
 - Python 3.8+
-- YouTube API Key
-- Google Gemini API Key
+- Git
 
-### 2. Install Dependencies
+# API Keys Required
+- YouTube Data API v3 Key
+- Google Gemini API Key
+```
+
+### 2. Clone & Setup
 
 ```bash
+# Clone repository
+git clone <your-repo-url>
+cd BigData
+
+# Install Python dependencies
 pip install -r requirements.txt
 ```
 
 ### 3. Configuration
 
-Update file `config/config.py` dengan API keys Anda:
+Edit `config/config.py` dengan API keys Anda:
 
 ```python
-YOUTUBE_API_KEY = 'your_youtube_api_key'
-GEMINI_API_KEY = 'your_gemini_api_key'
-VIDEO_ID = 'your_video_id'
+# YouTube API Configuration
+YOUTUBE_API_KEY = "your_youtube_api_key_here"
+VIDEO_ID = "target_video_id"
+CHANNEL_NAME = "Target Channel Name"
+
+# Gemini API Configuration  
+GEMINI_API_KEY = "your_gemini_api_key_here"
 ```
 
 ### 4. Start Infrastructure Services
 
-#### Windows (PowerShell):
-```powershell
-.\start_services.ps1
-```
-
-#### Linux/Mac:
 ```bash
-chmod +x start_services.sh
-./start_services.sh
-```
-
-#### Manual:
-```bash
-docker-compose up -d
+# Start Docker services (Kafka, Redis, Zookeeper)
+python start_services.py
 ```
 
 ### 5. Start Application Services
 
-#### 🚀 OPSI 1: Automatic Start (Recommended)
 
-##### Windows PowerShell:
-```powershell
-.\start_system.ps1
-```
-
-##### Python Cross-platform:
 ```bash
+# Start semua application services sekaligus
 python start_system.py
 ```
 
-#### 🔧 OPSI 2: Manual Start (Individual Services)
+**Services yang akan dijalankan:**
+- ✅ YouTube Comment Ingestion
+- ✅ Comment Cleaning & Filtering  
+- ✅ Real-time Sentiment Analysis
+- ✅ Comment Summarization (3-min batches)
+- ✅ Streamlit Dashboard
 
-Buka 4 terminal terpisah dan jalankan:
 
-```bash
-# Terminal 1 - YouTube Comment Ingestion
-python ingestion/youtube_api.py
+## 🧪 Testing & Quality Assurance
 
-# Terminal 2 - Comment Cleaning
-python processing/comment_cleaner.py
-
-# Terminal 3 - Sentiment Analysis
-python processing/sentiment_analyzer.py
-
-# Terminal 4 - Comment Summarization
-python processing/comment_summarizer.py
-
-# Terminal 5 - Dashboard
-streamlit run dashboard/dashboard.py
-```
-
-#### 🛠️ OPSI 3: Using Utility Scripts
+### Complete Test Suite
 
 ```bash
-# Restart services
-python scripts/restart_services.py
-
-# Check system status
-python scripts/system_status.py
+# Run all tests
+python start_tests.py
 ```
 
-## 🧪 Testing
-
-### Run Complete Test Suite
-
-#### PowerShell:
-```powershell
-.\run_tests.ps1
-```
-
-#### Python:
-```bash
-python run_tests.py
-```
-
-### Run Individual Tests
+### Individual Test Categories
 
 ```bash
 # System component tests
 python tests/test_system.py
 
-# End-to-end data flow tests
+# End-to-end data flow tests  
 python tests/test_data_flow.py
+
+# Comment cleaner unit tests
+python tests/test_comment_cleaner.py
 ```
 
-## 📊 Dashboard
+### Test Coverage
+- ✅ Kafka connectivity tests
+- ✅ Redis connectivity tests  
+- ✅ YouTube API integration tests
+- ✅ Sentiment analysis pipeline tests
+- ✅ Comment cleaning functionality tests
+- ✅ End-to-end data flow validation
 
-Akses dashboard di: http://localhost:8501
+## 📊 Dashboard Features
 
-Features:
-- Real-time sentiment metrics
-- Sentiment distribution chart
-- Live comment feed
-- Comment summaries (setiap 3 menit)
-- Summary history
+**Access:** http://localhost:8501
 
-## 🔍 Monitoring & Management
+### Real-time Metrics
+- 📈 **Live Comment Feed**: Stream komentar real-time
+- 📊 **Sentiment Distribution**: Pie chart positive/negative/neutral
+- 📉 **Sentiment Timeline**: Trend sentimen over time
+- 📝 **Comment Summaries**: Ringkasan AI setiap 3 menit
+- 🔄 **Auto-refresh**: Data update otomatis setiap detik
+
+### Interactive Features
+- 🎯 **Filter by Sentiment**: Filter komentar berdasarkan sentimen
+- 📅 **Time Range Selection**: Pilih periode waktu analisis
+- 💾 **Export Data**: Download data untuk analisis lebih lanjut
+- 🔍 **Search Comments**: Cari komentar spesifik
+
+## 🔍 System Monitoring & Management
 
 ### Access Points
-- **Main Dashboard**: http://localhost:8501
-- **Storm UI**: http://localhost:8080
-- **Kafka**: localhost:9092
-- **Redis**: localhost:6379
+- 🎯 **Main Dashboard**: http://localhost:8501
+- ⚡ **Storm UI**: http://localhost:8080 (jika menggunakan Storm)
+- 📡 **Kafka**: localhost:9092
+- 🗄️ **Redis**: localhost:6379
 
-### System Management Commands
+### Management Commands
 
 ```bash
-# Check system status
+# System status check
 python scripts/system_status.py
 
-# Restart all services
+# Restart semua application services
 python scripts/restart_services.py
 
-# Check Docker services
-docker-compose ps
-
-# View service logs
-docker-compose logs kafka
-docker-compose logs redis
+# Docker services management
+docker-compose ps                    # Status check
+docker-compose logs kafka            # Kafka logs
+docker-compose logs redis            # Redis logs
+docker-compose restart kafka         # Restart Kafka
 ```
 
-## 📁 Detailed File Structure
+### Health Monitoring
 
-## 📁 Detailed File Structure
+```bash
+# Check Kafka topics
+docker exec -it bigdata_kafka_1 kafka-topics.sh --list --bootstrap-server localhost:9092
 
-```
-BigData/
-├── 📊 dashboard/
-│   ├── __init__.py              # Module init
-│   └── dashboard.py             # Streamlit real-time dashboard
-├── 🔧 config/
-│   ├── __init__.py              # Module init
-│   └── config.py                # System configuration & API keys
-├── 📥 ingestion/
-│   ├── __init__.py              # Module init
-│   └── youtube_api.py           # YouTube API comment fetching
-├── ⚙️ processing/
-│   ├── __init__.py              # Module init
-│   ├── sentiment_analyzer.py   # Real-time sentiment analysis
-│   └── comment_summarizer.py   # Batch summarization with Gemini
-├── 🛠️ scripts/
-│   ├── __init__.py              # Module init
-│   ├── restart_services.py     # Service restart automation
-│   └── system_status.py        # System health monitoring
-├── 🧪 tests/
-│   ├── __init__.py              # Module init
-│   ├── test_system.py          # Component integration tests
-│   └── test_data_flow.py       # End-to-end data flow tests
-├── ⚡ storm/
-│   └── conf/
-│       └── storm.yaml           # Apache Storm configuration
-├── 🐳 docker-compose.yml       # Infrastructure services definition
-├── 📋 requirements.txt         # Python package dependencies
-├── 🚀 start_system.py          # Python system launcher
-├── 🚀 start_system.ps1         # PowerShell system launcher
-├── 🧪 run_tests.py            # Python test runner
-├── 🧪 run_tests.ps1           # PowerShell test runner
-├── 🔧 start_services.ps1       # Infrastructure startup (Windows)
-├── 🔧 start_services.sh        # Infrastructure startup (Unix)
-└── 📖 README.md               # This documentation
+# Check Redis data
+docker exec -it bigdata_redis_1 redis-cli keys "*"
+
+# Monitor system resources
+docker stats
 ```
 
 ## 🛠️ Configuration Details
 
-### Kafka Topics
-- `raw-comments`: Raw comments from YouTube API
-- `clean-comments`: Cleaned comments (emoji removed, filtered by length)
-- `sentiment-results`: Processed comments with sentiment analysis
-
-### Redis Keys
-- `sentiment_results:*`: Individual sentiment results
-- `sentiment_results:timeline`: Timeline of comments
-- `sentiment_results:counts:*`: Sentiment counters
-- `comment_summaries:*`: Comment summaries
-- `comment_summaries:timeline`: Summary timeline
-
-### Model Information
-- **Sentiment Model**: `tabularisai/multilingual-sentiment-analysis`
-- **Summary Model**: Google Gemini 2.0 Flash
-
-## 🔧 Customization
-
-### Mengubah Window Summary
-Edit `config/config.py`:
+### Kafka Topics Configuration
 ```python
-SUMMARY_WINDOW_MINUTES = 5  # Ubah ke 5 menit
+# Default Topics (auto-created)
+RAW_COMMENTS_TOPIC = "raw-comments"        # Raw YouTube comments
+CLEAN_COMMENTS_TOPIC = "clean-comments"    # Cleaned comments  
+SENTIMENT_RESULTS_TOPIC = "sentiment-results" # Processed results
 ```
 
-### Mengubah Model Sentiment
-Edit `config/config.py`:
+### Redis Key Structure
 ```python
-SENTIMENT_MODEL = "your_preferred_model"
+# Sentiment Data
+"sentiment_results:timeline"              # Timeline data
+"sentiment_results:counts:positive"       # Positive count
+"sentiment_results:counts:negative"       # Negative count  
+"sentiment_results:counts:neutral"        # Neutral count
+
+# Summary Data
+"comment_summaries:timeline"              # Summary timeline
+"comment_summaries:{timestamp}"           # Individual summaries
 ```
 
-### Mengubah Video Target
-Edit `config/config.py`:
+### Model Configuration
 ```python
-VIDEO_ID = 'new_video_id'
-CHANNEL_NAME = "New Channel"
+# Sentiment Analysis Model
+SENTIMENT_MODEL = "tabularisai/multilingual-sentiment-analysis"
+
+# Summary Model  
+GEMINI_MODEL = "gemini-2.0-flash-exp"
+
+# Processing Windows
+SUMMARY_WINDOW_MINUTES = 3               # Summary interval
+SENTIMENT_BATCH_SIZE = 10                # Processing batch size
 ```
 
-## 🐛 Troubleshooting
+## 🔧 Customization Guide
 
-### Kafka Connection Issues
-```bash
-# Check Kafka status
-docker-compose ps
+### Mengubah Target Video
 
-# Check Kafka logs
-docker-compose logs kafka
+```python
+# Edit config/config.py
+VIDEO_ID = "new_video_id_here"
+CHANNEL_NAME = "New Channel Name"
 ```
 
-### Redis Connection Issues
-```bash
-# Test Redis connection
-docker exec -it bigdata_redis_1 redis-cli ping
+### Mengubah Summary Interval
+
+```python
+# Edit config/config.py  
+SUMMARY_WINDOW_MINUTES = 5  # Change to 5 minutes
 ```
 
-### Model Loading Issues
-```bash
-# Clear Hugging Face cache
-rm -rf ~/.cache/huggingface/transformers/
+### Mengubah Sentiment Model
+
+```python
+# Edit config/config.py
+SENTIMENT_MODEL = "nlptown/bert-base-multilingual-uncased-sentiment"
 ```
 
-### YouTube API Issues
-- Pastikan API key valid dan memiliki quota
-- Pastikan video sedang live streaming
-- Check video ID format
+### Custom Comment Filtering
 
-## 📝 API Limits
-
-- **YouTube API**: 10,000 units/day default
-- **Gemini API**: Varies by plan
-- **Sentiment Model**: No limits (local)
-
-## 🚀 Deployment
-
-### Production Considerations
-1. Use environment variables for API keys
-2. Set up proper logging
-3. Implement error recovery
-4. Scale Kafka partitions
-5. Use Redis cluster for high availability
-
-### Environment Variables (Production)
-```bash
-# Set environment variables
-export YOUTUBE_API_KEY="your_youtube_api_key"
-export GEMINI_API_KEY="your_gemini_api_key"
-export VIDEO_ID="your_video_id"
+```python
+# Edit processing/comment_cleaner.py
+MIN_COMMENT_LENGTH = 10     # Minimum character length
+MAX_COMMENT_LENGTH = 500    # Maximum character length
+ENABLE_EMOJI_REMOVAL = True # Remove emojis
+ENABLE_SPAM_FILTER = True   # Filter spam comments
 ```
-
-### Docker Production
-```yaml
-# Add to docker-compose.yml for production
-services:
-  app:
-    build: .
-    environment:
-      - YOUTUBE_API_KEY=${YOUTUBE_API_KEY}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-```
-
-## 📋 System Commands Reference
-
-### Infrastructure Management
-```bash
-# Start all infrastructure services
-docker-compose up -d
-
-# Stop all infrastructure services
-docker-compose down
-
-# Check service status
-docker-compose ps
-
-# View logs
-docker-compose logs -f
-```
-
-### Application Management
-```bash
-# Quick start (all services)
-python start_system.py          # Python
-.\start_system.ps1              # PowerShell
-
-# System monitoring
-python scripts/system_status.py
-
-# Restart application services
-python scripts/restart_services.py
-
-# Run tests
-python run_tests.py             # Python
-.\run_tests.ps1                 # PowerShell
-```
-
-### Individual Service Management
-```bash
-# Start individual services
-python ingestion/youtube_api.py
-python processing/sentiment_analyzer.py
-python processing/comment_summarizer.py
-streamlit run dashboard/dashboard.py
-```
-
-## 🎯 Usage Workflow
-
-1. **Setup**: Install dependencies dan konfigurasi API keys
-2. **Infrastructure**: Start Docker services dengan `docker-compose up -d`
-3. **Application**: Start application services dengan `.\start_system.ps1`
-4. **Monitor**: Check dashboard di http://localhost:8501
-5. **Test**: Run test suite dengan `.\run_tests.ps1`
-6. **Manage**: Use utility scripts untuk monitoring dan restart
-
-## 📧 Support
-
-Untuk pertanyaan atau issues, silakan buat issue di repository ini.
-
-## 📜 License
-
-MIT License
