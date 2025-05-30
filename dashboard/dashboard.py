@@ -14,26 +14,20 @@ import uuid
 
 
 def safe_parse_timestamp(timestamp_str):
-    """Safely parse timestamp string, handling microseconds"""
     try:
-        # Handle microseconds by truncating to 6 digits if longer
         if "." in timestamp_str and "+" in timestamp_str:
-            # Split on timezone
             dt_part, tz_part = timestamp_str.rsplit("+", 1)
             if "." in dt_part:
                 dt_base, microsec = dt_part.split(".")
-                # Truncate microseconds to 6 digits
                 microsec = microsec[:6]
                 timestamp_str = f"{dt_base}.{microsec}+{tz_part}"
         elif "." in timestamp_str and timestamp_str.endswith("Z"):
-            # Handle Z timezone
             dt_part = timestamp_str[:-1]
             if "." in dt_part:
                 dt_base, microsec = dt_part.split(".")
                 microsec = microsec[:6]
                 timestamp_str = f"{dt_base}.{microsec}Z"
         elif "." in timestamp_str:
-            # Handle no timezone
             if "." in timestamp_str:
                 dt_base, microsec = timestamp_str.split(".")
                 microsec = microsec[:6]
@@ -44,8 +38,6 @@ def safe_parse_timestamp(timestamp_str):
         st.error(f"Error parsing timestamp {timestamp_str}: {e}")
         return datetime.now()
 
-
-# Page configuration
 st.set_page_config(
     page_title="YouTube Live Stream Analytics",
     page_icon="📺",
@@ -56,7 +48,6 @@ st.set_page_config(
 
 class Dashboard:
     def __init__(self):
-        # Initialize Redis connection
         self.redis_client = redis.Redis(
             host=config.REDIS_HOST,
             port=config.REDIS_PORT,
