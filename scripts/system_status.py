@@ -52,7 +52,6 @@ def check_system_status():
     print()
     print("🌐 ACCESS POINTS:")
     print("   Dashboard: http://localhost:8501")
-    print("   Storm UI: http://localhost:8080")
     print("   Redis: localhost:6379")
     print("   Kafka: localhost:9092")
     print()
@@ -112,6 +111,5 @@ if __name__ == "__main__":
 
     print("\n🎯 NEXT STEPS:")
     print("   1. Monitor the Streamlit dashboard for real-time metrics")
-    print("   2. Check Storm UI for processing topology status")
-    print("   3. Wait for 5-minute intervals to see comment summaries")
-    print("   4. Test with live YouTube streams for best results")
+    print("   2. Wait for 5-minute intervals to see comment summaries")
+    print("   3. Test with live YouTube streams for best results")

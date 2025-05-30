@@ -30,44 +30,5 @@ services:
     volumes:
       - redis_data:/data
 
-  storm-nimbus:
-    image: storm:2.4
-    container_name: storm-nimbus
-    command: storm nimbus
-    depends_on:
-      - zookeeper
-    ports:
-      - "6627:6627"
-    environment:
-      - STORM_ZOOKEEPER_SERVERS=zookeeper
-    volumes:
-      - ./storm/conf:/apache-storm-2.4.0/conf
-
-  storm-supervisor:
-    image: storm:2.4
-    container_name: storm-supervisor
-    command: storm supervisor
-    depends_on:
-      - storm-nimbus
-    environment:
-      - STORM_ZOOKEEPER_SERVERS=zookeeper
-      - STORM_NIMBUS_SEEDS=storm-nimbus
-    volumes:
-      - ./storm/conf:/apache-storm-2.4.0/conf
-
-  storm-ui:
-    image: storm:2.4
-    container_name: storm-ui
-    command: storm ui
-    depends_on:
-      - storm-nimbus
-    ports:
-      - "8080:8080"
-    environment:
-      - STORM_ZOOKEEPER_SERVERS=zookeeper
-      - STORM_NIMBUS_SEEDS=storm-nimbus
-    volumes:
-      - ./storm/conf:/apache-storm-2.4.0/conf
-
 volumes:
   redis_data:

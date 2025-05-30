@@ -41,9 +41,6 @@ BigData/
 │   ├── test_system.py        # System component tests
 │   ├── test_data_flow.py     # End-to-end data flow tests
 │   └── test_comment_cleaner.py # Comment cleaner unit tests
-├── ⚡ storm/                  # Apache Storm configuration
-│   └── conf/
-│       └── storm.yaml
 ├── 🐳 docker-compose.yml      # Infrastructure services
 ├── 📋 requirements.txt        # Python dependencies
 ├── 🚀 start_services.py       # Infrastructure services launcher
@@ -185,7 +182,6 @@ python tests/test_comment_cleaner.py
 
 ### Access Points
 - 🎯 **Main Dashboard**: http://localhost:8501
-- ⚡ **Storm UI**: http://localhost:8080 (jika menggunakan Storm)
 - 📡 **Kafka**: localhost:9092
 - 🗄️ **Redis**: localhost:6379
 

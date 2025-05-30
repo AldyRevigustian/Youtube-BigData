@@ -73,8 +73,6 @@ def main():
         print("\n🎉 All test comments sent successfully!")
         print("📊 Check the Streamlit dashboard to see real-time processing:")
         print("   - http://localhost:8501")
-        print("⚡ Check Storm UI for processing topology:")
-        print("   - http://localhost:8080")
 
     except Exception as e:
         print(f"❌ Error sending test comments: {e}")

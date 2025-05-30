@@ -15,7 +15,7 @@ KAFKA_TOPICS = [
     {"name": "clean-comments", "partitions": 3, "replication_factor": 1},
     {"name": "sentiment-results", "partitions": 3, "replication_factor": 1},
 ]
-SERVICE_PORTS = {"kafka": 9092, "redis": 6379, "storm_ui": 8080, "zookeeper": 2181}
+SERVICE_PORTS = {"kafka": 9092, "redis": 6379, "zookeeper": 2181}
 APP_COMPONENTS = [
     {
         "name": "YouTube comment ingestion",
@@ -116,7 +116,7 @@ class ServiceManager:
 
     def start_infrastructure_services(self):
         self.print_colored(
-            "📦 Starting infrastructure services (Kafka, Redis, Storm)...",
+            "📦 Starting infrastructure services (Kafka, Redis)...",
             Colors.YELLOW,
         )
 
@@ -210,7 +210,6 @@ class ServiceManager:
         services_to_check = [
             ("Kafka", "localhost:9092"),
             ("Redis", "localhost:6379"),
-            ("Storm UI", "localhost:8080"),
         ]
 
         success, stdout, stderr = self.run_command(
@@ -226,9 +225,7 @@ class ServiceManager:
     def print_service_status(self):
         self.print_colored("\n📊 Services Status:", Colors.CYAN)
         for service, port in SERVICE_PORTS.items():
-            if service == "storm_ui":
-                self.print_colored(f"- Storm UI: http://localhost:{port}", Colors.WHITE)
-            elif service == "kafka":
+            if service == "kafka":
                 self.print_colored(f"- Kafka: localhost:{port}", Colors.WHITE)
             else:
                 self.print_colored(

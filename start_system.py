@@ -60,7 +60,6 @@ def start_services():
     print("\n🎯 All services started successfully!")
     print("=" * 50)
     print("📊 Dashboard: http://localhost:8501")
-    print("⚡ Storm UI: http://localhost:8080")
     print("🔧 To stop services, close the console windows or press Ctrl+C")
 
     return processes
