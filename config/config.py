@@ -2,8 +2,8 @@ import os
 
 # YouTube API Configuration
 YOUTUBE_API_KEY = 'AIzaSyA-nKO01fRryKtTyhpuLjrAFD1TRTjCVzg'
-VIDEO_ID = 'cZpxviktt8c'
-CHANNEL_NAME = "Windah"
+VIDEO_ID = 'DHyGz0zILe0'
+CHANNEL_NAME = "IShowSpeed"
 
 # Kafka Configuration
 KAFKA_BOOTSTRAP_SERVERS = 'localhost:9092'
