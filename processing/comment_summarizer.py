@@ -7,7 +7,10 @@ from datetime import datetime, timedelta
 from collections import defaultdict
 import logging
 from google import genai
-import config
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from config import config
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)

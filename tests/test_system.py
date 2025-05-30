@@ -2,7 +2,10 @@ import redis
 import json
 import time
 from kafka import KafkaProducer, KafkaConsumer
-import config
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from config import config
 
 def test_redis_connection():
     """Test Redis connection"""

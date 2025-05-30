@@ -3,7 +3,10 @@ from kafka import KafkaProducer
 import json
 import time
 import logging
-import config
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from config import config
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)

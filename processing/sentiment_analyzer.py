@@ -4,8 +4,11 @@ from transformers import pipeline
 from kafka import KafkaConsumer, KafkaProducer
 from datetime import datetime
 import logging
-import config
-from dateutil.parser import parse as parse_date 
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from config import config
+from dateutil.parser import parse as parse_date
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

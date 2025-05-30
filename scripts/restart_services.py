@@ -27,27 +27,31 @@ def restart_services():
     """Restart the sentiment analyzer and other services"""
     print("🚀 Starting services...")
     
-    # Start sentiment analyzer
-    subprocess.Popen(['python', 'youtube_api.py'], 
-                    creationflags=subprocess.CREATE_NEW_CONSOLE,
-                    cwd=os.getcwd())
-    print("   ✅ Started Api")
+    # Get the parent directory path
+    parent_dir = os.path.dirname(os.getcwd())
     
-    subprocess.Popen(['python', 'sentiment_analyzer.py'], 
+    # Start YouTube API
+    subprocess.Popen(['python', os.path.join(parent_dir, 'ingestion', 'youtube_api.py')], 
                     creationflags=subprocess.CREATE_NEW_CONSOLE,
-                    cwd=os.getcwd())
+                    cwd=parent_dir)
+    print("   ✅ Started YouTube API")
+    
+    # Start sentiment analyzer
+    subprocess.Popen(['python', os.path.join(parent_dir, 'processing', 'sentiment_analyzer.py')], 
+                    creationflags=subprocess.CREATE_NEW_CONSOLE,
+                    cwd=parent_dir)
     print("   ✅ Started sentiment analyzer")
     
     # Start comment summarizer  
-    subprocess.Popen(['python', 'comment_summarizer.py'],
+    subprocess.Popen(['python', os.path.join(parent_dir, 'processing', 'comment_summarizer.py')],
                     creationflags=subprocess.CREATE_NEW_CONSOLE, 
-                    cwd=os.getcwd())
+                    cwd=parent_dir)
     print("   ✅ Started comment summarizer")
     
     # Start dashboard
-    subprocess.Popen(['streamlit', 'run', 'dashboard.py'],
+    subprocess.Popen(['streamlit', 'run', os.path.join(parent_dir, 'dashboard', 'dashboard.py')],
                     creationflags=subprocess.CREATE_NEW_CONSOLE,
-                    cwd=os.getcwd())
+                    cwd=parent_dir)
     print("   ✅ Started Streamlit dashboard")
     
     print("\n🎯 Services restarted successfully!")

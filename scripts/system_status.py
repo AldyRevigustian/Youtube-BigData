@@ -8,7 +8,10 @@ import json
 import time
 from kafka import KafkaConsumer
 from kafka.errors import KafkaError
-from config import *
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from config.config import *
 
 def check_system_status():
     """Check the status of all system components"""
