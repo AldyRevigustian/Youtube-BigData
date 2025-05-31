@@ -1,5 +1,5 @@
 import json
-import re
+import regex
 import logging
 import emoji
 from kafka import KafkaConsumer, KafkaProducer
@@ -30,13 +30,19 @@ class CommentCleaner:
 
         logger.info("Comment Cleaner initialized successfully")
 
+    def remove_non_latin_chars(self, text):
+        cleaned = regex.sub(r"[^\p{Latin}\s\d\p{P}]", "", text)
+        cleaned = regex.sub(r"\s+", " ", cleaned).strip()
+        return cleaned
+
     def remove_repeated_characters(self, text, max_repeats=2):
         pattern = r"(.)\1{" + str(max_repeats) + ",}"
+
         def replace_func(match):
             char = match.group(1)
             return char * max_repeats
 
-        cleaned_text = re.sub(pattern, replace_func, text)
+        cleaned_text = regex.sub(pattern, replace_func, text)
         return cleaned_text
 
     def remove_excessive_caps(self, text, threshold=0.7):
@@ -52,13 +58,13 @@ class CommentCleaner:
         return text
 
     def remove_special_patterns(self, text):
-        text = re.sub(r"[!]{3,}", "!", text)
-        text = re.sub(r"[?]{3,}", "?", text)
-        text = re.sub(r"[.]{3,}", "...", text)
+        text = regex.sub(r"[!]{3,}", "!", text)
+        text = regex.sub(r"[?]{3,}", "?", text)
+        text = regex.sub(r"[.]{3,}", "...", text)
 
-        text = re.sub(r"[\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]", "", text)
-        text = re.sub(r"\b\d{8,}\b", "", text)
-        text = re.sub(r"[~`@#$%^&*()+=\[\]{}|;:,.<>?/]{3,}", "", text)
+        text = regex.sub(r"[\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]", "", text)
+        text = regex.sub(r"\b\d{8,}\b", "", text)
+        text = regex.sub(r"[~`@#$%^&*()+=\[\]{}|;:,.<>?/]{3,}", "", text)
 
         return text
 
@@ -74,7 +80,7 @@ class CommentCleaner:
         ]
 
         for pattern in spam_patterns:
-            text = re.sub(pattern, "", text, flags=re.IGNORECASE)
+            text = regex.sub(pattern, "", text, flags=regex.IGNORECASE)
 
         return text
 
@@ -88,34 +94,34 @@ class CommentCleaner:
         ]
 
         for pattern in currency_patterns:
-            text = re.sub(pattern, "", text, flags=re.IGNORECASE)
+            text = regex.sub(pattern, "", text, flags=regex.IGNORECASE)
 
         return text
 
     def remove_superchat_elements(self, text):
-        text = re.sub(r"^[\$€£¥₹₽₩]+\s*\d*\.?\d*\s*", "", text)
-        text = re.sub(r"(@\w+\s*){2,}", "", text)
+        text = regex.sub(r"^[\$€£¥₹₽₩]+\s*\d*\.?\d*\s*", "", text)
+        text = regex.sub(r"(@\w+\s*){2,}", "", text)
 
         return text
 
     def remove_mentions_hashtags_links(self, text):
-        text = re.sub(r"@[A-Za-z0-9_]+", "", text)
-        text = re.sub(r"#[A-Za-z0-9_]+", "", text)
-        text = re.sub(r"http[s]?\S+", "", text)
-        text = re.sub(r"www\.\S+", "", text)
+        text = regex.sub(r"@[A-Za-z0-9_]+", "", text)
+        text = regex.sub(r"#[A-Za-z0-9_]+", "", text)
+        text = regex.sub(r"http[s]?\S+", "", text)
+        text = regex.sub(r"www\.\S+", "", text)
 
         return text
 
     def normalize_whitespace(self, text):
-        text = re.sub(r"\s+", " ", text)
+        text = regex.sub(r"\s+", " ", text)
         return text.strip()
 
     def remove_emojis(self, text):
-        text = re.sub(r":[a-zA-Z0-9_+\-]+:", "", text)
+        text = regex.sub(r":[a-zA-Z0-9_+\-]+:", "", text)
 
         cleaned_text = emoji.replace_emoji(text, replace="")
 
-        emoji_pattern = re.compile(
+        emoji_pattern = regex.compile(
             "["
             "\U0001f600-\U0001f64f"
             "\U0001f300-\U0001f5ff"
@@ -130,7 +136,7 @@ class CommentCleaner:
             "\U0001f018-\U0001f270"
             "\U0001f300-\U0001f6d0"
             "]+",
-            flags=re.UNICODE,
+            flags=regex.UNICODE,
         )
 
         cleaned_text = emoji_pattern.sub("", cleaned_text)
@@ -149,6 +155,7 @@ class CommentCleaner:
             cleaned_comment = self.remove_emojis(cleaned_comment)
             cleaned_comment = self.remove_repeated_characters(cleaned_comment)
             cleaned_comment = self.remove_excessive_caps(cleaned_comment)
+            cleaned_comment = self.remove_non_latin_chars(cleaned_comment)
             cleaned_comment = self.normalize_whitespace(cleaned_comment)
             cleaned_data["comment"] = cleaned_comment
 
