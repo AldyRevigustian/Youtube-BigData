@@ -19,29 +19,33 @@ import uuid
 
 def safe_parse_timestamp(timestamp_str):
     try:
-        if "." in timestamp_str and "+" in timestamp_str:
-            dt_part, tz_part = timestamp_str.rsplit("+", 1)
-            if "." in dt_part:
-                dt_base, microsec = dt_part.split(".")
-                microsec = microsec[:6]
-                timestamp_str = f"{dt_base}.{microsec}+{tz_part}"
-        elif "." in timestamp_str and timestamp_str.endswith("Z"):
-            dt_part = timestamp_str[:-1]
-            if "." in dt_part:
-                dt_base, microsec = dt_part.split(".")
-                microsec = microsec[:6]
-                timestamp_str = f"{dt_base}.{microsec}Z"
-        elif "." in timestamp_str:
-            if "." in timestamp_str:
-                dt_base, microsec = timestamp_str.split(".")
-                microsec = microsec[:6]
+        if not timestamp_str:
+            return datetime.now()
+        timestamp_str = timestamp_str.strip()
+        if "." in timestamp_str:
+            if "+" in timestamp_str:
+                dt_part, tz_part = timestamp_str.rsplit("+", 1)
+                if "." in dt_part:
+                    dt_base, microsec = dt_part.split(".", 1)
+                    microsec = microsec.ljust(6, "0")[:6]
+                    timestamp_str = f"{dt_base}.{microsec}+{tz_part}"
+            elif timestamp_str.endswith("Z"):
+                dt_part = timestamp_str[:-1]
+                if "." in dt_part:
+                    dt_base, microsec = dt_part.split(".", 1)
+                    microsec = microsec.ljust(6, "0")[:6]
+                    timestamp_str = f"{dt_base}.{microsec}Z"
+            else:
+                dt_base, microsec = timestamp_str.split(".", 1)
+                microsec = microsec.ljust(6, "0")[:6]
                 timestamp_str = f"{dt_base}.{microsec}"
-
-        return datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+        timestamp_str = timestamp_str.replace("Z", "+00:00")
+        return datetime.fromisoformat(timestamp_str)
     except Exception as e:
-        st.error(f"Error parsing timestamp {timestamp_str}: {e}")
+        st.warning(
+            f"⚠️ Error parsing timestamp '{timestamp_str}': {e}. Using current time."
+        )
         return datetime.now()
-
 
 st.set_page_config(
     page_title="YouTube Live Stream Analytics",
@@ -49,7 +53,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
-
 
 class Dashboard:
     def __init__(self):
@@ -64,6 +67,65 @@ class Dashboard:
         self.mongo_client = None
         self.mongo_db = None
         self.init_mongodb()
+
+        self.load_data_from_mongodb_to_redis()
+
+    def load_data_from_mongodb_to_redis(self):
+        try:
+            comments_collection_name = f"{config.VIDEO_ID}_comments"
+            comments_collection = self.mongo_db[comments_collection_name]
+            total_mongo_comments = comments_collection.count_documents({})
+
+            with st.spinner(
+                f"🔄 Loading {total_mongo_comments} existing comments from MongoDB to Redis..."
+            ):
+                comments = list(comments_collection.find({}).sort("timestamp", 1))
+
+                sentiment_counts = {"positive": 0, "negative": 0, "neutral": 0}
+                loaded_count = 0
+
+                for comment in comments:
+                    try:
+                        comment_data = {
+                            "comment_id": comment.get("id", ""),
+                            "username": comment.get("username", ""),
+                            "comment": comment.get("comment", ""),
+                            "timestamp": comment.get("timestamp", ""),
+                            "sentiment": comment.get("sentiment", "neutral"),
+                            "confidence": comment.get("confidence", 0.0),
+                        }
+                        comment_key = (
+                            f"{config.SENTIMENT_CACHE_KEY}:{comment_data['comment_id']}"
+                        )
+                        self.redis_client.set(comment_key, json.dumps(comment_data))
+
+                        timestamp = safe_parse_timestamp(
+                            comment_data["timestamp"]
+                        ).timestamp()
+                        self.redis_client.zadd(
+                            f"{config.SENTIMENT_CACHE_KEY}:timeline",
+                            {comment_data["comment_id"]: timestamp},
+                        )
+
+                        sentiment = comment_data["sentiment"].lower()
+                        if sentiment in sentiment_counts:
+                            sentiment_counts[sentiment] += 1
+
+                        loaded_count += 1
+
+                    except Exception as e:
+                        st.warning(
+                            f"⚠️ Error loading comment {comment.get('comment_id', 'unknown')}: {e}"
+                        )
+                        continue
+
+                for sentiment, count in sentiment_counts.items():
+                    if count > 0:
+                        self.redis_client.set(
+                            f"{config.SENTIMENT_CACHE_KEY}:counts:{sentiment}", count
+                        )
+        except Exception as e:
+            st.error(f"❌ Error loading data from MongoDB to Redis: {e}")
 
     def get_video_info(self):
         if self.video_info is not None:
@@ -483,6 +545,7 @@ class Dashboard:
                     video_info["published_at"].replace("Z", "+00:00")
                 ).strftime("%d %B %Y")
                 st.markdown(f"**Published:** {published_date}")
+
 
 def main():
     svg_icon = """

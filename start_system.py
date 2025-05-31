@@ -9,47 +9,31 @@ from config import config
 
 def clear_redis_cache():
     try:
-        print("🧹 Clearing Redis cache...")
+        print("🧹 Clearing ALL Redis cache...")
         r = redis.Redis(
-            host=config.REDIS_HOST,
-            port=config.REDIS_PORT,
+            host=config.REDIS_HOST, 
+            port=config.REDIS_PORT, 
             db=config.REDIS_DB,
-            decode_responses=True,
+            decode_responses=True
         )
-
+        
         r.ping()
-        app_keys = [
-            config.SENTIMENT_CACHE_KEY,
-            config.SUMMARY_CACHE_KEY,
-            "youtube_comments:*",
-            "sentiment:*",
-            "summary:*",
-        ]
-
-        total_deleted = 0
-        for key_pattern in app_keys:
-            if "*" in key_pattern:
-
-                keys = r.keys(key_pattern)
-                if keys:
-                    deleted = r.delete(*keys)
-                    total_deleted += deleted
-            else:
-
-                if r.exists(key_pattern):
-                    r.delete(key_pattern)
-                    total_deleted += 1
-
-        if total_deleted > 0:
-            print(f"   ✅ Cleared {total_deleted} Redis cache entries")
+        
+        keys = r.keys('*')
+        if keys:
+            deleted_count = r.delete(*keys)
+            print(f"   ✅ Cleared {deleted_count} Redis cache entries")
         else:
-            print("   ✅ No application cache found in Redis")
-
+            print("   ✅ Redis cache already empty")
+            
     except redis.ConnectionError as e:
-        print(f"   ⚠️  Warning: Could not connect to Redis ({e})")
-        print("   ℹ️  Redis cache clearing skipped - Redis might not be running yet")
+        print(f"   ❌ Could not connect to Redis: {e}")
+        return False
     except Exception as e:
-        print(f"   ⚠️  Warning: Failed to clear Redis cache: {e}")
+        print(f"   ❌ Failed to clear Redis cache: {e}")
+        return False
+    
+    return True
 
 
 def start_services():
