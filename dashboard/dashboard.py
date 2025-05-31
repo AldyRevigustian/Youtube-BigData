@@ -578,7 +578,7 @@ class Dashboard:
             st.info("No summary available yet")
             return
 
-        st.subheader("📋 Latest Summary (from MongoDB)")
+        st.subheader("📋 Latest Summary")
 
         col1, col2 = st.columns(2)
         with col1:
@@ -599,6 +599,17 @@ class Dashboard:
             disabled=True,
             key=unique_key,
         )
+        
+        st.markdown("""
+        <style>
+        textarea[disabled]{
+            color: white !important;
+            opacity: 1 !important;
+            -webkit-text-fill-color: white !important;
+            cursor: text !important;
+        }
+        </style>
+    """, unsafe_allow_html=True)
 
         if "sentiment_distribution" in summary:
             st.subheader("Sentiment in This Window")
@@ -649,8 +660,7 @@ class Dashboard:
             expander_title = f"Summary #{len(summaries)-i} - {timestamp_display} | Window: {window_start}-{window_end} | {total_comments} comments"
 
             with st.expander(expander_title):
-
-                unique_key = f"historical_summary_{summary.get('_id', uuid.uuid4())}"
+                unique_key = f"historical_summary_{uuid.uuid4()}"
                 st.text_area(
                     "Summary",
                     summary.get("summary", "No summary available"),
