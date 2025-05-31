@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 import time
 import sys
 import os
-
+import requests  
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import config
 import uuid
@@ -56,6 +56,57 @@ class Dashboard:
             db=config.REDIS_DB,
             decode_responses=True,
         )
+        self.video_info = None    
+    def get_video_info(self):
+        if self.video_info is not None:
+            return self.video_info
+
+        with st.spinner("🔄 Mengambil informasi video..."):
+            try:
+                url = f"https://www.googleapis.com/youtube/v3/videos?part=snippet&id={config.VIDEO_ID}&key={config.YOUTUBE_API_KEY}"
+                response = requests.get(url, timeout=10)
+                response.raise_for_status()  
+                data = response.json()
+
+                if data.get("items"):
+                    snippet = data["items"][0]["snippet"]
+                    self.video_info = {
+                        "title": snippet.get("title", "Judul tidak tersedia"),
+                        "channel": snippet.get("channelTitle", config.CHANNEL_NAME),
+                        "published_at": snippet.get("publishedAt"),
+                        "description": snippet.get("description", "")[:200] + "..." if len(snippet.get("description", "")) > 200 else snippet.get("description", ""),
+                    }
+                else:
+                    st.warning("⚠️ Video tidak ditemukan di YouTube API")
+                    self.video_info = {
+                        "title": "Video tidak ditemukan",
+                        "channel": config.CHANNEL_NAME,
+                        "published_at": None,
+                        "description": "",
+                    }
+            except requests.exceptions.Timeout:
+                self.video_info = {
+                    "title": "Error: Timeout",
+                    "channel": config.CHANNEL_NAME,
+                    "published_at": None,
+                    "description": "",
+                }
+            except requests.exceptions.RequestException as e:
+                self.video_info = {
+                    "title": "Error mengambil judul",
+                    "channel": config.CHANNEL_NAME,
+                    "published_at": None,
+                    "description": "",
+                }
+            except Exception as e:
+                self.video_info = {
+                    "title": "Error mengambil judul",
+                    "channel": config.CHANNEL_NAME,
+                    "published_at": None,
+                    "description": "",
+                }
+
+        return self.video_info
 
     def get_sentiment_counts(self):
         try:
@@ -287,17 +338,35 @@ class Dashboard:
                     key=unique_key,
                 )
 
+    def render_video_info(self):
+        video_info = self.get_video_info()
+        
+        with st.container():
+            st.markdown(f"### 📺 {video_info['title']}")
+            st.markdown(f"**Channel:** {video_info['channel']} | **Video ID:** `{config.VIDEO_ID}`")
+            if video_info['published_at']:
+                published_date = datetime.fromisoformat(video_info['published_at'].replace('Z', '+00:00')).strftime('%d %B %Y')
+                st.markdown(f"**Published:** {published_date}")
 
 def main():
-    st.title("📺 YouTube Live Stream Analytics")
-    st.markdown(f"**Channel:** {config.CHANNEL_NAME} | **Video ID:** {config.VIDEO_ID}")
-
+    svg_icon = """
+    <svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" fill="red" style="vertical-align:middle;" class="bi bi-youtube" viewBox="0 0 16 16">
+    <path d="M8.051 1.999h.089c.822.003 4.987.033 6.11.335a2.01 2.01 0 0 1 1.415 1.42c.101.38.172.883.22 1.402l.01.104.022.26.008.104c.065.914.073 1.77.074 1.957v.075c-.001.194-.01 1.108-.082 2.06l-.008.105-.009.104c-.05.572-.124 1.14-.235 1.558a2.01 2.01 0 0 1-1.415 1.42c-1.16.312-5.569.334-6.18.335h-.142c-.309 0-1.587-.006-2.927-.052l-.17-.006-.087-.004-.171-.007-.171-.007c-1.11-.049-2.167-.128-2.654-.26a2.01 2.01 0 0 1-1.415-1.419c-.111-.417-.185-.986-.235-1.558L.09 9.82l-.008-.104A31 31 0 0 1 0 7.68v-.123c.002-.215.01-.958.064-1.778l.007-.103.003-.052.008-.104.022-.26.01-.104c.048-.519.119-1.023.22-1.402a2.01 2.01 0 0 1 1.415-1.42c.487-.13 1.544-.21 2.654-.26l.17-.007.172-.006.086-.003.171-.007A100 100 0 0 1 7.858 2zM6.4 5.209v4.818l4.157-2.408z"/>
+    </svg>
+    """
+    
+    st.markdown(f"""
+    <h1>{svg_icon} YouTube Live Stream Analytics</h1>
+    """, unsafe_allow_html=True)
+    
     dashboard = Dashboard()
-
+    
+    dashboard.render_video_info()
+    st.divider()  
     st.sidebar.title("⚙️ Settings")
     auto_refresh = st.sidebar.checkbox("Auto Refresh", value=True)
-    refresh_interval = st.sidebar.slider("Refresh Interval (seconds)", 5, 60, 5)
-    sidebar_status = st.sidebar.empty()  # Tambahkan ini sebelum loop
+    refresh_interval = st.sidebar.slider("Refresh Interval (seconds)", 3, 10, 3)
+    sidebar_status = st.sidebar.empty()  
 
     if auto_refresh:
         placeholder = st.empty()
@@ -324,6 +393,7 @@ def main():
 
             time.sleep(refresh_interval)
     else:
+        st.header("📊 Real-time Metrics")
         dashboard.render_metrics()
         col1, col2 = st.columns([1, 2])
 
