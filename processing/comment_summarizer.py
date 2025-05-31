@@ -129,7 +129,6 @@ class CommentSummarizer:
                 "summary": summary,
                 "sentiment_distribution": sentiment_stats,
                 "video_id": config.VIDEO_ID,
-                "channel_name": config.CHANNEL_NAME,
             }
 
             self.cache_summary(summary_data)

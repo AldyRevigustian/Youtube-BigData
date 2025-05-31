@@ -15,42 +15,36 @@ def main():
             "username": "TestUser1",
             "comment": "This is an amazing stream! Love it! 😍💖✨",
             "video_id": "test_video_123",
-            "channel_name": "Test Channel",
         },
         {
             "timestamp": "2024-01-01T10:01:00Z",
             "username": "TestUser2",
             "comment": "This is terrible content, waste of time 😡💀👎",
             "video_id": "test_video_123",
-            "channel_name": "Test Channel",
         },
         {
             "timestamp": "2024-01-01T10:02:00Z",
             "username": "TestUser3",
             "comment": "The content is okay, nothing special here really",
             "video_id": "test_video_123",
-            "channel_name": "Test Channel",
         },
         {
             "timestamp": "2024-01-01T10:03:00Z",
             "username": "TestUser4",
             "comment": "¡Excelente contenido! Me encanta mucho 🎉🔥❤️",
             "video_id": "test_video_123",
-            "channel_name": "Test Channel",
         },
         {
             "timestamp": "2024-01-01T10:04:00Z",
             "username": "TestUser5",
             "comment": "Sehr gut! Das ist fantastisch! 👏🎊🌟",
             "video_id": "test_video_123",
-            "channel_name": "Test Channel",
         },
         {
             "timestamp": "2024-01-01T10:05:00Z",
             "username": "TestUser6",
             "comment": "😂😂😂",
             "video_id": "test_video_123",
-            "channel_name": "Test Channel",
         },
     ]
 

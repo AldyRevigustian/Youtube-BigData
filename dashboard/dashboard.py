@@ -13,7 +13,6 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import config
 import uuid
 
-
 def safe_parse_timestamp(timestamp_str):
     try:
         if "." in timestamp_str and "+" in timestamp_str:
@@ -72,7 +71,7 @@ class Dashboard:
                     snippet = data["items"][0]["snippet"]
                     self.video_info = {
                         "title": snippet.get("title", "Judul tidak tersedia"),
-                        "channel": snippet.get("channelTitle", config.CHANNEL_NAME),
+                        "channel": snippet.get("channelTitle", "Channel tidak tersedia"),
                         "published_at": snippet.get("publishedAt"),
                         "description": snippet.get("description", "")[:200] + "..." if len(snippet.get("description", "")) > 200 else snippet.get("description", ""),
                     }
@@ -80,28 +79,28 @@ class Dashboard:
                     st.warning("⚠️ Video tidak ditemukan di YouTube API")
                     self.video_info = {
                         "title": "Video tidak ditemukan",
-                        "channel": config.CHANNEL_NAME,
+                        "channel": "Channel tidak tersedia",
                         "published_at": None,
                         "description": "",
                     }
             except requests.exceptions.Timeout:
                 self.video_info = {
                     "title": "Error: Timeout",
-                    "channel": config.CHANNEL_NAME,
+                    "channel": "Channel tidak tersedia",
                     "published_at": None,
                     "description": "",
                 }
             except requests.exceptions.RequestException as e:
                 self.video_info = {
                     "title": "Error mengambil judul",
-                    "channel": config.CHANNEL_NAME,
+                    "channel": "Channel tidak tersedia",
                     "published_at": None,
                     "description": "",
                 }
             except Exception as e:
                 self.video_info = {
                     "title": "Error mengambil judul",
-                    "channel": config.CHANNEL_NAME,
+                    "channel": "Channel tidak tersedia",
                     "published_at": None,
                     "description": "",
                 }
@@ -225,15 +224,18 @@ class Dashboard:
             st.info("No sentiment data available yet")
             return
 
+        # Ubah label jadi Title Case (e.g. "positive" -> "Positive")
+        labels = [label.title() for label in sentiment_counts.keys()]
+
         fig = px.pie(
             values=list(sentiment_counts.values()),
-            names=list(sentiment_counts.keys()),
+            names=labels,
             title="Sentiment Distribution",
-            color=list(sentiment_counts.keys()),
+            color=labels,
             color_discrete_map={
-                "positive": "#6BCB77",
-                "negative": "#FF6B6B",
-                "neutral": "#4D96FF",
+                "Positive": "#6BCB77",
+                "Negative": "#FF6B6B",
+                "Neutral": "#4D96FF",
             },
         )
 
@@ -255,11 +257,12 @@ class Dashboard:
 
         df["timestamp"] = pd.to_datetime(df["timestamp"]).dt.strftime("%H:%M:%S")
         df["confidence"] = df["confidence"].round(3)
+        df["sentiment"] = df["sentiment"].str.title()  # Kapitalisasi awal
 
         def color_sentiment(val):
-            if val == "positive":
+            if val == "Positive":
                 return "background-color: #6BCB77"
-            elif val == "negative":
+            elif val == "Negative":
                 return "background-color: #FF6B6B"
             else:
                 return "background-color: #4D96FF"
@@ -293,7 +296,7 @@ class Dashboard:
         st.text_area(
             "Summary",
             summary["summary"],
-            height=150,
+            height=300,
             disabled=True,
             key=f"latest_summary_{uuid.uuid4()}",
         )
@@ -333,7 +336,7 @@ class Dashboard:
                 st.text_area(
                     "Summary",
                     summary["summary"],
-                    height=150,
+                    height=300,
                     disabled=True,
                     key=unique_key,
                 )

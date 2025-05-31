@@ -14,7 +14,6 @@ logger = logging.getLogger(__name__)
 
 API_KEY = config.YOUTUBE_API_KEY
 VIDEO_ID = config.VIDEO_ID
-CHANNEL_NAME = config.CHANNEL_NAME
 
 youtube = build("youtube", "v3", developerKey=API_KEY)
 
@@ -62,7 +61,6 @@ def stream_live_comments(live_chat_id):
                 "username": item["authorDetails"]["displayName"],
                 "comment": item["snippet"]["textMessageDetails"]["messageText"],
                 "video_id": VIDEO_ID,
-                "channel_name": CHANNEL_NAME,
             }
 
             print(comment_data)

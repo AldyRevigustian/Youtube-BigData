@@ -102,7 +102,6 @@ Edit `config/config.py` dengan API keys Anda:
 # YouTube API Configuration
 YOUTUBE_API_KEY = "your_youtube_api_key_here"
 VIDEO_ID = "target_video_id"
-CHANNEL_NAME = "Target Channel Name"
 
 # Gemini API Configuration  
 GEMINI_API_KEY = "your_gemini_api_key_here"
@@ -257,7 +256,6 @@ SENTIMENT_BATCH_SIZE = 10                # Processing batch size
 ```python
 # Edit config/config.py
 VIDEO_ID = "new_video_id_here"
-CHANNEL_NAME = "New Channel Name"
 ```
 
 ### Mengubah Summary Interval

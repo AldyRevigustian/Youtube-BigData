@@ -4,7 +4,6 @@ import os
 YOUTUBE_API_KEY = "AIzaSyBrFCli-COaOMMoKFkBIt1TuNNOdvqzlcU"
 # YOUTUBE_API_KEY = "AIzaSyA-nKO01fRryKtTyhpuLjrAFD1TRTjCVzg"
 VIDEO_ID = "QISzH1Pvttw"
-CHANNEL_NAME = "IShowSpeed"
 
 # Kafka Configuration
 KAFKA_BOOTSTRAP_SERVERS = "localhost:9092"

@@ -79,7 +79,6 @@ class SentimentAnalyzer:
                     "username": comment_data["username"],
                     "comment": comment_data["comment"],
                     "video_id": comment_data["video_id"],
-                    "channel_name": comment_data["channel_name"],
                     "sentiment": sentiment,
                     "confidence": confidence,
                     "processed_at": datetime.now().isoformat(),
