@@ -127,7 +127,7 @@ class Dashboard:
             st.error(f"Error getting sentiment counts: {e}")
             return {"positive": 0, "negative": 0, "neutral": 0}
 
-    def get_recent_comments(self, limit=20):
+    def get_recent_comments(self, limit=100):
         try:
             comment_ids = self.redis_client.zrevrange(
                 f"{config.SENTIMENT_CACHE_KEY}:timeline", 0, limit - 1
@@ -268,7 +268,7 @@ class Dashboard:
 
         styled_df = df[
             ["timestamp", "username", "comment", "sentiment", "confidence"]
-        ].style.applymap(color_sentiment, subset=["sentiment"])
+        ].style.map(color_sentiment, subset=["sentiment"])
 
         st.dataframe(styled_df, use_container_width=True)
 

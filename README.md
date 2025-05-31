@@ -271,13 +271,3 @@ SUMMARY_WINDOW_MINUTES = 5  # Change to 5 minutes
 # Edit config/config.py
 SENTIMENT_MODEL = "nlptown/bert-base-multilingual-uncased-sentiment"
 ```
-
-### Custom Comment Filtering
-
-```python
-# Edit processing/comment_cleaner.py
-MIN_COMMENT_LENGTH = 10     # Minimum character length
-MAX_COMMENT_LENGTH = 500    # Maximum character length
-ENABLE_EMOJI_REMOVAL = True # Remove emojis
-ENABLE_SPAM_FILTER = True   # Filter spam comments
-```
