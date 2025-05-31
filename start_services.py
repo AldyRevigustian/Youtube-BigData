@@ -8,7 +8,7 @@ from pathlib import Path
 
 DOCKER_COMPOSE_FILE = "docker-compose.yml"
 
-WAIT_TIME_SECONDS = 20
+WAIT_TIME_SECONDS = 10
 CHECK_DOCKER_TIMEOUT = 10
 KAFKA_TOPICS = [
     {"name": "raw-comments", "partitions": 3, "replication_factor": 1},
@@ -189,7 +189,7 @@ class ServiceManager:
             )
 
             success, stdout, stderr = self.run_command(
-                cmd, capture_output=True, timeout=20
+                cmd, capture_output=True, timeout=10
             )
 
             if success:

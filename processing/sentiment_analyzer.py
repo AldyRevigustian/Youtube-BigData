@@ -6,10 +6,12 @@ from datetime import datetime
 import logging
 import sys
 import os
+import asyncio
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import config
 from dateutil.parser import parse as parse_date
+from database.mongodb_writer import write_to_mongodb_background
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -117,6 +119,12 @@ class SentimentAnalyzer:
             sentiment_key = f"{config.SENTIMENT_CACHE_KEY}:counts:{data['sentiment']}"
             self.redis_client.incr(sentiment_key)
             self.redis_client.expire(sentiment_key, config.CACHE_EXPIRY_SECONDS)
+
+            logger.info(f"✅ Redis cache updated for comment: {data['id']}")
+
+            write_to_mongodb_background(data, "comment")
+            logger.info(f"📝 MongoDB write scheduled for comment: {data['id']}")
+
         except Exception as e:
             logger.error(f"Error caching sentiment result: {e}")
 

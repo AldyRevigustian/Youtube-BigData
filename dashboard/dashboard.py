@@ -224,7 +224,6 @@ class Dashboard:
             st.info("No sentiment data available yet")
             return
 
-        # Ubah label jadi Title Case (e.g. "positive" -> "Positive")
         labels = [label.title() for label in sentiment_counts.keys()]
 
         fig = px.pie(
@@ -257,7 +256,7 @@ class Dashboard:
 
         df["timestamp"] = pd.to_datetime(df["timestamp"]).dt.strftime("%H:%M:%S")
         df["confidence"] = df["confidence"].round(3)
-        df["sentiment"] = df["sentiment"].str.title()  # Kapitalisasi awal
+        df["sentiment"] = df["sentiment"].str.title()  
 
         def color_sentiment(val):
             if val == "Positive":
@@ -373,10 +372,7 @@ def main():
     sidebar_status = st.sidebar.empty()
     
     if auto_refresh:
-        # Area yang akan di-refresh otomatis (real-time metrics)
         realtime_placeholder = st.empty()
-        
-        # Area summary dengan refresh otomatis berdasarkan SUMMARY_WINDOW_MINUTES
         st.header("📋 Comment Summaries")
         tab1, tab2 = st.tabs(["Latest Summary", "Summary History"])
         with tab1:
@@ -388,17 +384,13 @@ def main():
             with history_placeholder.container():
                 dashboard.render_summary_history()
         
-        # Hitung interval refresh untuk summary (dalam detik)
         summary_refresh_interval = (config.SUMMARY_WINDOW_MINUTES * 60) + 5
         
-        # Variabel untuk tracking waktu refresh summary
         last_summary_refresh = time.time()
         
-        # Loop auto-refresh
         while True:
             current_time = time.time()
             
-            # Refresh real-time metrics setiap refresh_interval
             with realtime_placeholder.container():
                 st.header("📊 Real-time Metrics")
                 dashboard.render_metrics()
@@ -414,7 +406,6 @@ def main():
                     f"Summary refresh in: {int(summary_refresh_interval - (current_time - last_summary_refresh))}s"
                 )
             
-            # Refresh summary jika sudah waktunya
             if current_time - last_summary_refresh >= summary_refresh_interval:
                 with summary_placeholder.container():
                     dashboard.render_latest_summary()

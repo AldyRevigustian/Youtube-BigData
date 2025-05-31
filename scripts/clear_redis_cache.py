@@ -1,19 +1,12 @@
-#!/usr/bin/env python3
-"""
-Script untuk menghapus cache Redis secara manual
-"""
-
 import redis
 import sys
 import os
 
-# Add parent directory to path to import config
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import config
 
 
 def clear_all_cache():
-    """Menghapus semua cache Redis"""
     try:
         print("🧹 Clearing ALL Redis cache...")
         r = redis.Redis(
@@ -23,10 +16,8 @@ def clear_all_cache():
             decode_responses=True
         )
         
-        # Test koneksi Redis
         r.ping()
         
-        # Hapus semua keys
         keys = r.keys('*')
         if keys:
             deleted_count = r.delete(*keys)
@@ -45,7 +36,6 @@ def clear_all_cache():
 
 
 def clear_app_cache():
-    """Menghapus hanya cache aplikasi"""
     try:
         print("🧹 Clearing application Redis cache...")
         r = redis.Redis(
@@ -55,10 +45,8 @@ def clear_app_cache():
             decode_responses=True
         )
         
-        # Test koneksi Redis
         r.ping()
         
-        # Hapus keys yang terkait dengan aplikasi
         app_keys = [
             config.SENTIMENT_CACHE_KEY,
             config.SUMMARY_CACHE_KEY,
@@ -70,13 +58,11 @@ def clear_app_cache():
         total_deleted = 0
         for key_pattern in app_keys:
             if '*' in key_pattern:
-                # Untuk pattern dengan wildcard
                 keys = r.keys(key_pattern)
                 if keys:
                     deleted = r.delete(*keys)
                     total_deleted += deleted
             else:
-                # Untuk key spesifik
                 if r.exists(key_pattern):
                     r.delete(key_pattern)
                     total_deleted += 1
@@ -97,7 +83,6 @@ def clear_app_cache():
 
 
 def list_cache_keys():
-    """Menampilkan semua keys yang ada di Redis"""
     try:
         print("📋 Listing Redis cache keys...")
         r = redis.Redis(
@@ -107,7 +92,6 @@ def list_cache_keys():
             decode_responses=True
         )
         
-        # Test koneksi Redis
         r.ping()
         
         keys = r.keys('*')

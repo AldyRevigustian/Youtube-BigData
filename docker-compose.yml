@@ -21,7 +21,6 @@ services:
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
-
   redis:
     image: redis:alpine
     ports:
@@ -30,5 +29,21 @@ services:
     volumes:
       - redis_data:/data
 
+  mongodb:
+    image: mongo:7.0
+    container_name: mongodb_analytics
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin123
+      MONGO_INITDB_DATABASE: youtube_analytics
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_config:/data/configdb
+    command: mongod --auth
+
 volumes:
   redis_data:
+  mongodb_data:
+  mongodb_config:

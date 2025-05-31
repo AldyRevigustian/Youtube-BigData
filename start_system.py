@@ -3,51 +3,48 @@ import os
 import time
 import sys
 import redis
+import asyncio
 from config import config
 
 
 def clear_redis_cache():
-    """Menghapus semua cache Redis sebelum memulai sistem"""
     try:
         print("🧹 Clearing Redis cache...")
         r = redis.Redis(
-            host=config.REDIS_HOST, 
-            port=config.REDIS_PORT, 
+            host=config.REDIS_HOST,
+            port=config.REDIS_PORT,
             db=config.REDIS_DB,
-            decode_responses=True
+            decode_responses=True,
         )
-        
-        # Test koneksi Redis
+
         r.ping()
-        
-        # Hapus keys yang terkait dengan aplikasi
         app_keys = [
             config.SENTIMENT_CACHE_KEY,
             config.SUMMARY_CACHE_KEY,
             "youtube_comments:*",
             "sentiment:*",
-            "summary:*"
+            "summary:*",
         ]
-        
+
         total_deleted = 0
         for key_pattern in app_keys:
-            if '*' in key_pattern:
-                # Untuk pattern dengan wildcard
+            if "*" in key_pattern:
+
                 keys = r.keys(key_pattern)
                 if keys:
                     deleted = r.delete(*keys)
                     total_deleted += deleted
             else:
-                # Untuk key spesifik
+
                 if r.exists(key_pattern):
                     r.delete(key_pattern)
                     total_deleted += 1
-        
+
         if total_deleted > 0:
             print(f"   ✅ Cleared {total_deleted} Redis cache entries")
         else:
             print("   ✅ No application cache found in Redis")
-            
+
     except redis.ConnectionError as e:
         print(f"   ⚠️  Warning: Could not connect to Redis ({e})")
         print("   ℹ️  Redis cache clearing skipped - Redis might not be running yet")
@@ -58,8 +55,7 @@ def clear_redis_cache():
 def start_services():
     print("🚀 Starting YouTube Sentiment Analysis System...")
     print("=" * 50)
-    
-    # Clear Redis cache before starting services
+
     clear_redis_cache()
     print()
 
@@ -119,10 +115,27 @@ def start_services():
 
     return processes
 
+async def initialize_mongodb():
+    try:
+        print("🗄️  Initializing MongoDB...")
+        from database.startup_mongodb import startup_mongodb
+
+        success = await startup_mongodb()
+        if success:
+            print("✅ MongoDB initialized successfully")
+        else:
+            print("⚠️  MongoDB initialization failed - continuing without database")
+        return success
+    except Exception as e:
+        print(f"⚠️  MongoDB initialization error: {e} - continuing without database")
+        return False
 
 if __name__ == "__main__":
     try:
-        clear_redis_cache()  # Panggil fungsi untuk menghapus cache Redis
+        clear_redis_cache()
+        print("🚀 Starting BigData Analytics System...")
+        asyncio.run(initialize_mongodb())
+
         processes = start_services()
 
         print("\n⏳ System running... Press Ctrl+C to exit")

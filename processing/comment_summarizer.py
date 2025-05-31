@@ -13,6 +13,7 @@ import os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import config
+from database.mongodb_writer import write_to_mongodb_background
 
 
 logging.basicConfig(level=logging.INFO)
@@ -54,16 +55,13 @@ class CommentSummarizer:
             if not comments:
                 return "No comments to summarize"
 
-            # Calculate sentiment statistics
             stats = self._calculate_sentiment_stats(comments)
 
-            # Format comments for display
             comment_texts = [
                 f"[{comment['sentiment'].upper()}] {comment['username']}: {comment['comment']}"
                 for comment in comments
             ]
 
-            # Generate summary using Gemini
             return self._generate_gemini_summary(comment_texts, stats)
 
         except Exception as e:
@@ -114,14 +112,12 @@ class CommentSummarizer:
                 "summary": summary,
                 "sentiment_distribution": sentiment_stats,
                 "video_id": config.VIDEO_ID,
-            }
-
+            }            
             self.cache_summary(summary_data)
-
             self.comment_buffer.clear()
 
             logger.info("Batch summary processed successfully")
-
+            
         except Exception as e:
             logger.error(f"Error processing batch summary: {e}")
 
@@ -145,6 +141,9 @@ class CommentSummarizer:
             self.redis_client.zadd(
                 f"{config.SUMMARY_CACHE_KEY}:timeline", {summary_id: timestamp}
             )
+            logger.info(f"✅ Redis cache updated for summary: {summary_id}")
+            write_to_mongodb_background(summary_data, 'summary')
+            logger.info(f"📝 MongoDB write scheduled for summary: {summary_id}")
 
         except Exception as e:
             logger.error(f"Error caching summary: {e}")
@@ -163,7 +162,6 @@ class CommentSummarizer:
             time.sleep(1)
 
     def _calculate_sentiment_stats(self, comments):
-        """Calculate sentiment statistics from comments"""
         total = len(comments)
         if total == 0:
             return {
@@ -192,14 +190,11 @@ class CommentSummarizer:
         }
 
     def _generate_gemini_summary(self, comment_texts, stats):
-        """Generate summary using Gemini API"""
         try:
-            # # Limit comments for API call (to avoid token limits)
-            # max_comments = 100
-            # if len(comment_texts) > max_comments:
-            #     comment_texts = comment_texts[:max_comments]
+            max_comments = 2000
+            if len(comment_texts) > max_comments:
+                comment_texts = comment_texts[:max_comments]
 
-            # # Prepare prompt for Gemini
             comments_str = "\n".join(comment_texts)
 
             prompt = f"""
@@ -269,7 +264,6 @@ Gunakan bahasa Indonesia yang lugas dan mudah dipahami. Panjang ringkasan maksim
 # - Gunakan data statistik sebagai dasar analisis
 # - Fokus pada fakta objektif, hindari asumsi berlebihan
 # """
-            # Call Gemini API
             response = self.gemini_client.models.generate_content(
                 model="gemini-2.0-flash", contents=prompt
             )
@@ -284,13 +278,10 @@ Gunakan bahasa Indonesia yang lugas dan mudah dipahami. Panjang ringkasan maksim
             return self._fallback_summary(stats)
 
     def _fallback_summary(self, stats):
-        """Generate a fallback summary when Gemini API fails"""
         total_comments = stats["positive"] + stats["negative"] + stats["neutral"]
 
         if total_comments == 0:
             return "Tidak ada komentar untuk diringkas dalam periode ini."
-
-        # Determine dominant sentiment
         dominant_sentiment = "netral"
         max_count = stats["neutral"]
 
