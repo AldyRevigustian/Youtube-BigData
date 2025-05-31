@@ -150,45 +150,37 @@ class Dashboard:
         }
 
         try:
-
             for proc in psutil.process_iter(["pid", "name", "cmdline"]):
                 try:
                     cmdline = proc.info["cmdline"]
                     if not cmdline:
                         continue
-
                     cmdline_str = " ".join(cmdline).lower()
-
                     if "youtube_api.py" in cmdline_str:
                         processes["youtube_api"] = {
                             "status": "🟢",
                             "details": f"Running  \n(PID: {proc.info['pid']})",
                         }
-
                     elif "comment_cleaner.py" in cmdline_str:
                         processes["comment_cleaner"] = {
                             "status": "🟢",
                             "details": f"Running  \n(PID: {proc.info['pid']})",
                         }
-
                     elif "sentiment_analyzer.py" in cmdline_str:
                         processes["sentiment_analyzer"] = {
                             "status": "🟢",
                             "details": f"Running  \n(PID: {proc.info['pid']})",
                         }
-
                     elif "comment_summarizer.py" in cmdline_str:
                         processes["comment_summarizer"] = {
                             "status": "🟢",
                             "details": f"Running  \n(PID: {proc.info['pid']})",
                         }
-
                     elif "streamlit" in cmdline_str:
                         processes["streamlit_dashboard"] = {
                             "status": "🟢",
                             "details": f"Running  \n(PID: {proc.info['pid']})",
                         }
-
                 except (
                     psutil.NoSuchProcess,
                     psutil.AccessDenied,
@@ -213,7 +205,6 @@ class Dashboard:
             "mongodb": {"status": "🔴", "details": "Not connected"},
             "youtube_api": {"status": "🔴", "details": "Not tested"},
         }
-
         try:
             self.redis_client.ping()
             connection_status["redis"] = {"status": "🟢", "details": "Connected"}
@@ -265,10 +256,10 @@ class Dashboard:
         }
 
         return combined_status
-
+    
     def export_data_to_csv(self):
         try:
-            comments = self.get_recent_comments(limit=1000)
+            comments = self.get_hybrid_comments(limit=1000)
             if not comments:
                 return None
 
@@ -282,10 +273,10 @@ class Dashboard:
         except Exception as e:
             st.error(f"Error exporting to CSV: {e}")
             return None
-
+    
     def export_data_to_json(self):
         try:
-            comments = self.get_recent_comments(limit=1000)
+            comments = self.get_hybrid_comments(limit=1000)
             if not comments:
                 return None
 
@@ -397,6 +388,58 @@ class Dashboard:
         except Exception as e:
             st.error(f"Error getting recent comments: {e}")
             return []
+
+    def get_comments_from_mongodb(self, limit=None, hours_back=None):
+        """Get comments directly from MongoDB for permanent data access"""
+        if self.mongo_db is None:
+            st.error("MongoDB connection not available")
+            return []
+
+        try:
+            comments_collection_name = f"{config.VIDEO_ID}_comments"
+            comments_collection = self.mongo_db[comments_collection_name]
+            
+            
+            query = {}
+            if hours_back:
+                cutoff_time = datetime.now() - timedelta(hours=hours_back)
+                query["timestamp"] = {"$gte": cutoff_time}
+            
+            
+            cursor = comments_collection.find(query).sort("timestamp", -1)
+            
+            if limit:
+                cursor = cursor.limit(limit)
+            
+            comments = []
+            for doc in cursor:
+                
+                comment = {
+                    "comment_id": str(doc.get("_id", "")),
+                    "username": doc.get("username", "Unknown"),
+                    "comment": doc.get("comment", ""),
+                    "timestamp": doc.get("timestamp", datetime.now()).isoformat() if hasattr(doc.get("timestamp"), "isoformat") else str(doc.get("timestamp", "")),
+                    "sentiment": doc.get("sentiment", "neutral"),
+                    "confidence": doc.get("confidence", 0.0)
+                }
+                comments.append(comment)
+            return comments
+            
+        except Exception as e:
+            st.error(f"Error getting comments from MongoDB: {e}")
+            return []
+
+    def get_hybrid_comments(self, limit=100):
+        redis_comments = self.get_recent_comments(limit)
+        if len(redis_comments) >= min(limit, 50):  
+            for comment in redis_comments:
+                comment['_data_source'] = 'redis'
+            return redis_comments
+        else:
+            mongodb_comments = self.get_comments_from_mongodb(limit)
+            for comment in mongodb_comments:
+                comment['_data_source'] = 'mongodb'
+            return mongodb_comments
 
     def get_latest_summary(self):
         if self.mongo_db is None:
@@ -548,15 +591,14 @@ class Dashboard:
             textinfo="percent+label",
             textfont=dict(color="white"),
         )
-        st.plotly_chart(fig, use_container_width=True)
-
+        st.plotly_chart(fig, use_container_width=True)      
     def render_recent_comments(self):
-        comments = self.get_recent_comments()
+        comments = self.get_hybrid_comments(limit=100)
 
         if not comments:
             st.info("No recent comments available")
             return
-
+        
         df = pd.DataFrame(comments)
 
         df["timestamp"] = pd.to_datetime(df["timestamp"]).dt.strftime("%H:%M:%S")
@@ -572,22 +614,21 @@ class Dashboard:
                 return "background-color: #4D96FF"
 
         styled_df = df[
-            ["timestamp", "username", "comment", "sentiment", "confidence"]
-        ].style.map(color_sentiment, subset=["sentiment"])
+            ["timestamp", "username", "comment", "sentiment", "confidence"]        ].style.map(color_sentiment, subset=["sentiment"])
 
-        st.dataframe(styled_df, use_container_width=True)
-
+        st.dataframe(styled_df, use_container_width=True)    
+    
     def render_sentiment_timeline(self):
-        comments = self.get_recent_comments(limit=1000)
+        comments = self.get_hybrid_comments(limit=1000)
         if not comments:
             st.info("No data available for sentiment timeline")
             return
-        
+
         df = pd.DataFrame(comments)
         df['timestamp'] = pd.to_datetime(df['timestamp'])
         df = df.sort_values('timestamp')
         
-        df['time_group'] = df['timestamp'].dt.floor('10s')
+        df['time_group'] = df['timestamp'].dt.floor('180s')
         
         sentiment_timeline = df.groupby(['time_group', 'sentiment']).size().unstack(fill_value=0)
         
@@ -616,7 +657,7 @@ class Dashboard:
         
         fig.update_layout(
             title={
-                'text': "📈 Sentiment Timeline Over Time (10-second intervals)",
+                'text': "📈 Sentiment Timeline",
                 'x': 0.5,
                 'xanchor': 'center',
                 'font': {'size': 20}
@@ -649,15 +690,16 @@ class Dashboard:
             )
         )
         
-        st.plotly_chart(fig, use_container_width=True)
-
+        st.plotly_chart(fig, use_container_width=True)       
+    
     def render_top_active_users(self):
-        comments = self.get_recent_comments(limit=500)
+        comments = self.get_hybrid_comments(limit=1000)
         
         if not comments:
             st.info("No data available for top active users")
             return
         
+        self.render_data_source_info(comments, "Top Active Users")
         df = pd.DataFrame(comments)
         user_counts = df['username'].value_counts().head(10)
         
@@ -671,35 +713,38 @@ class Dashboard:
             orientation='h',
             labels={'x': 'Number of Comments', 'y': 'Username'},
             color=user_counts.values,
-            color_continuous_scale='viridis'
+            color_continuous_scale='plasma'
         )
         
         fig.update_layout(
             yaxis={'categoryorder': 'total ascending'},
             height=400,
-            showlegend=False
+            showlegend=False,
+            plot_bgcolor='#262730',     
+            paper_bgcolor='#262730',    
+            font_color='white',
+            margin=dict(t=10, b=10)
         )
-        st.plotly_chart(fig, use_container_width=True)
-
+        
+        
+        st.plotly_chart(fig, use_container_width=True)     
     def render_trending_words_cloud(self):
-        comments = self.get_recent_comments(limit=500)
+        comments = self.get_hybrid_comments(limit=1000)
         
         if not comments:
             st.info("No data available for word cloud")
             return
         
-        # Combine all comments
+        self.render_data_source_info(comments, "Trending Words")
         all_text = ' '.join([comment['comment'] for comment in comments if comment.get('comment')])
         
         if not all_text.strip():
             st.info("No text data available for word cloud")
             return
         
-        # Clean text for word cloud
         cleaned_text = re.sub(r'[^\w\s]', ' ', all_text.lower())
         cleaned_text = re.sub(r'\s+', ' ', cleaned_text)
         
-        # Remove common stop words (you can expand this list)
         stop_words = {'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 
                         'is', 'are', 'was', 'were', 'be', 'been', 'have', 'has', 'had', 'do', 'does', 
                         'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must', 'can', 
@@ -707,28 +752,25 @@ class Dashboard:
                         'a', 'an', 'my', 'your', 'his', 'her', 'its', 'our', 'their', 'me', 'him', 'her', 'us', 'them'}
         
         try:
-            # Create word cloud
             wordcloud = WordCloud(
                 width=800, 
-                height=400, 
-                background_color='white',
+                height=621, 
+                background_color='#262730',
                 max_words=100,
-                colormap='viridis',
+                colormap='plasma',
                 stopwords=stop_words
             ).generate(cleaned_text)
             
-            # Create matplotlib figure
             fig, ax = plt.subplots(figsize=(10, 5))
             ax.imshow(wordcloud, interpolation='bilinear')
             ax.axis('off')
-            ax.set_title('Trending Words Cloud', fontsize=16, pad=20)
-            
+            fig.patch.set_facecolor('#262730')  
+            ax.set_facecolor('#262730')
             st.pyplot(fig)
             plt.close()
             
         except Exception as e:
             st.error(f"Error generating word cloud: {e}")
-            # Fallback: show most common words as bar chart
             words = cleaned_text.split()
             word_freq = Counter([word for word in words if len(word) > 3 and word not in stop_words])
             top_words = dict(word_freq.most_common(15))
@@ -742,12 +784,10 @@ class Dashboard:
                     labels={'x': 'Frequency', 'y': 'Words'}
                 )
                 fig.update_layout(yaxis={'categoryorder': 'total ascending'}, height=400)
-                st.plotly_chart(fig, use_container_width=True)
-
+                st.plotly_chart(fig, use_container_width=True)    
     def render_advanced_visualizations(self):
         self.render_sentiment_timeline()
         
-        # Create 2 columns for remaining visualizations
         col1, col2 = st.columns(2)
         
         with col1:
@@ -759,38 +799,33 @@ class Dashboard:
             self.render_trending_words_cloud()
 
     def render_video_info(self):
-        """Render video information section"""
         video_info = self.get_video_info()
-        
+
         with st.container():
-            st.subheader("📺 Video Information")
-            col1, col2 = st.columns([2, 1])
-            
-            with col1:
-                st.write(f"**Title:** {video_info['title']}")
-                st.write(f"**Channel:** {video_info['channel']}")
-                if video_info.get('published_at'):
-                    published_date = safe_parse_timestamp(video_info['published_at']).strftime("%Y-%m-%d %H:%M")
-                    st.write(f"**Published:** {published_date}")
-            
-            with col2:
-                st.write(f"**Video ID:** `{config.VIDEO_ID}`")
+            st.markdown(f"### 📺 {video_info['title']}")
+            st.markdown(
+                f"**Channel:** {video_info['channel']} | **Video ID:** `{config.VIDEO_ID}`"
+            )
+            if video_info["published_at"]:
+                published_date = datetime.fromisoformat(
+                    video_info["published_at"].replace("Z", "+00:00")                ).strftime("%d %B %Y")
+                st.markdown(f"**Published:** {published_date}")
                 
     def render_sidebar_system_monitoring(self):
         """Render system monitoring in sidebar"""
         st.sidebar.header("🖥️ System Monitoring")
         status = self.check_connection_status()
-
+        
         with st.sidebar.expander("🗨️ Process Status", expanded=False):
             for process_name, process_info in status["processes"].items():
                 st.write(f"{process_info['status']} **{process_name.replace('_', ' ').title()}**")
                 st.caption(process_info['details'])
-
+        
         with st.sidebar.expander("🔗 Connection Status", expanded=False):
             for conn_name, conn_info in status["connections"].items():
                 st.write(f"{conn_info['status']} **{conn_name.upper()}**")
                 st.caption(conn_info['details'])
-
+        
         with st.sidebar.expander("📤 Export Options", expanded=False):
             if st.button("📄 Export CSV", key="export_csv"):
                 csv_data = self.export_data_to_csv()
@@ -821,7 +856,7 @@ class Dashboard:
             
             if st.button("🧹 Clear Cache", key="clear_cache"):
                 try:
-                    # Clear Redis cache
+                    
                     self.redis_client.flushdb()
                     st.success("✅ Cache cleared successfully!")
                 except Exception as e:
@@ -870,29 +905,29 @@ class Dashboard:
             st.subheader("Sentiment in This Window")
             sentiment_data = []
             
-            # Calculate total count for percentage calculation
+            
             total_count = 0
             sentiment_dist = summary["sentiment_distribution"]
             
-            # First pass: calculate total count
+            
             for sentiment, stats in sentiment_dist.items():
                 if isinstance(stats, dict) and "count" in stats:
                     total_count += stats["count"]
                 elif isinstance(stats, (int, float)):
                     total_count += stats
             
-            # Second pass: build sentiment data with calculated percentages
+            
             for sentiment, stats in sentiment_dist.items():
                 try:
                     if isinstance(stats, dict):
                         count = stats.get("count", 0)
-                        # Use existing percentage if available, otherwise calculate it
+                        
                         if "percentage" in stats:
                             percentage = stats["percentage"]
                         else:
                             percentage = (count / total_count * 100) if total_count > 0 else 0
                     else:
-                        # Handle case where stats is just a number
+                        
                         count = stats if isinstance(stats, (int, float)) else 0
                         percentage = (count / total_count * 100) if total_count > 0 else 0
                     
@@ -903,7 +938,7 @@ class Dashboard:
                     })
                 except Exception as e:
                     st.warning(f"Error processing sentiment data for {sentiment}: {e}")
-                    # Add fallback data
+                    
                     sentiment_data.append({
                         "Sentiment": sentiment.title(),
                         "Count": 0,
@@ -948,13 +983,32 @@ class Dashboard:
                     key=f"summary_history_{i}_{uuid.uuid4()}"
                 )
 
+    def render_data_source_info(self, comments, chart_title="Analytics"):
+        """Display information about the data source being used"""
+        if not comments:
+            return
+            
+        
+        sources = {}
+        for comment in comments:
+            source = comment.get('_data_source', 'unknown')
+            sources[source] = sources.get(source, 0) + 1
+        
+        if sources:
+            source_info = []
+            for source, count in sources.items():
+                icon = {"redis": "⚡", "mongodb": "🗄️", "unknown": "❓"}.get(source, "❓")
+                source_info.append(f"{icon} {source.title()}: {count}")
+            
+            info_text = f"**{chart_title} Data Source:** " + " | ".join(source_info)
+            st.caption(info_text)
+
 
 def main():
     svg_icon = """
     <svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" fill="red" style="vertical-align:middle;" class="bi bi-youtube" viewBox="0 0 16 16">
     <path d="M8.051 1.999h.089c.822.003 4.987.033 6.11.335a2.01 2.01 0 0 1 1.415 1.42c.101.38.172.883.22 1.402l.01.104.022.26.008.104c.065.914.073 1.77.074 1.957v.075c-.001.194-.01 1.108-.082 2.06l-.008.105-.009.104c-.05.572-.124 1.14-.235 1.558a2.01 2.01 0 0 1-1.415 1.42c-1.16.312-5.569.334-6.18.335h-.142c-.309 0-1.587-.006-2.927-.052l-.17-.006-.087-.004-.171-.007-.171-.007c-1.11-.049-2.167-.128-2.654-.26a2.01 2.01 0 0 1-1.415-1.419c-.111-.417-.185-.986-.235-1.558L.09 9.82l-.008-.104A31 31 0 0 1 0 7.68v-.123c.002-.215.01-.958.064-1.778l.007-.103.003-.052.008-.104.022-.26.01-.104c.048-.519.119-1.023.22-1.402a2.01 2.01 0 0 1 1.415-1.42c.487-.13 1.544-.21 2.654-.26l.17-.007.172-.006.086-.003.171-.007A100 100 0 0 1 7.858 2zM6.4 5.209v4.818l4.157-2.408z"/>    </svg>
-    """
-
+    """    
     st.markdown(
         f"""
     <h1>{svg_icon} YouTube Live Stream Analytics</h1>
@@ -980,17 +1034,17 @@ def main():
     </style>
     """
     st.markdown(css, unsafe_allow_html=True)
-    st.sidebar.header("⚙️ System Setting")
-
+    st.sidebar.header("⚙️ System Setting")    
+    
     with st.sidebar.expander("⚙️ Settings", expanded=True):
         auto_refresh = st.checkbox("Auto Refresh", value=True)
         refresh_interval = st.slider("Refresh Interval (seconds)", 3, 10, 3)
+        
 
     sidebar_status = st.sidebar.empty()
     st.sidebar.markdown(
         """<hr style="margin-top:15px; margin-bottom: 0; !important">""",
-        unsafe_allow_html=True
-    )
+        unsafe_allow_html=True    )
     dashboard.render_sidebar_system_monitoring()
     st.sidebar.markdown(
         """<hr style="margin-top:15px; margin-bottom: 0; !important">""",
@@ -1001,10 +1055,12 @@ def main():
         realtime_placeholder = st.empty()
         st.header("📋 Comment Summaries")
         tab1, tab2 = st.tabs(["Latest Summary", "Summary History"])
+        
         with tab1:
             summary_placeholder = st.empty()
             with summary_placeholder.container():
                 dashboard.render_latest_summary()
+        
         with tab2:
             history_placeholder = st.empty()
             with history_placeholder.container():
@@ -1027,7 +1083,7 @@ def main():
                     st.subheader("💬 Recent Comments")
                     dashboard.render_recent_comments()
                 
-                # Advanced Analytics Section
+                
                 dashboard.render_advanced_visualizations()
                 
                 current_timestamp = datetime.now().strftime("%H:%M:%S")
@@ -1058,8 +1114,7 @@ def main():
                         </div>
                     </div>
                     """,
-                    unsafe_allow_html=True,
-                )
+                    unsafe_allow_html=True,                )
             
             if current_time - last_summary_refresh >= summary_refresh_interval:
                 with summary_placeholder.container():
@@ -1069,19 +1124,18 @@ def main():
                 last_summary_refresh = current_time
 
             time.sleep(refresh_interval)
-    else:
+    else:        
         st.header("📊 Real-time Metrics")
         dashboard.render_metrics()
         col1, col2 = st.columns([1, 2])
 
         with col1:
             dashboard.render_sentiment_chart()
-
+            
         with col2:
             st.subheader("💬 Recent Comments")
             dashboard.render_recent_comments()
         
-        # Advanced Analytics Section
         dashboard.render_advanced_visualizations()
         
         st.header("📋 Comment Summaries")
