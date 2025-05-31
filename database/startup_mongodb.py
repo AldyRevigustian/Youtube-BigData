@@ -14,8 +14,8 @@ async def startup_mongodb():
             logger.info("✅ MongoDB connection established")
 
             logger.info(f"📋 Collections will be created for video: {VIDEO_ID}")
-            logger.info(f"   - video_{VIDEO_ID}_comments")
-            logger.info(f"   - video_{VIDEO_ID}_summaries")
+            logger.info(f"   - {VIDEO_ID}_comments")
+            logger.info(f"   - {VIDEO_ID}_summaries")
             logger.info("✅ MongoDB startup completed successfully")
             return True
         else:

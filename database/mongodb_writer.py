@@ -62,7 +62,7 @@ class MongoDBWriter:
             
         try:
             video_id = comment_data.get('video_id', VIDEO_ID)
-            collection_name = f"video_{video_id}_comments"
+            collection_name = f"{video_id}_comments"
             collection = self.db[collection_name]
             
             
@@ -88,7 +88,7 @@ class MongoDBWriter:
             
         try:
             video_id = summary_data.get('video_id', VIDEO_ID)
-            collection_name = f"video_{video_id}_summaries"
+            collection_name = f"{video_id}_summaries"
             collection = self.db[collection_name]
             
             
@@ -116,9 +116,9 @@ class MongoDBWriter:
             video_id = data_batch[0].get('video_id', VIDEO_ID) if data_batch else VIDEO_ID
             
             if data_type == 'comments':
-                collection_name = f"video_{video_id}_comments"
+                collection_name = f"{video_id}_comments"
             elif data_type == 'summaries':
-                collection_name = f"video_{video_id}_summaries"
+                collection_name = f"{video_id}_summaries"
             else:
                 logger.error(f"Invalid data_type: {data_type}")
                 return False
@@ -152,14 +152,14 @@ class MongoDBWriter:
             video_id = VIDEO_ID
             
             
-            comments_collection = self.db[f"video_{video_id}_comments"]
+            comments_collection = self.db[f"{video_id}_comments"]
             await comments_collection.create_index("timestamp")
             await comments_collection.create_index("sentiment")
             await comments_collection.create_index("video_id")
             await comments_collection.create_index([("timestamp", -1), ("sentiment", 1)])
             
             
-            summaries_collection = self.db[f"video_{video_id}_summaries"]
+            summaries_collection = self.db[f"{video_id}_summaries"]
             await summaries_collection.create_index("window_start")
             await summaries_collection.create_index("window_end")
             await summaries_collection.create_index("video_id")
@@ -241,7 +241,7 @@ class SyncMongoDBWriter:
             
         try:
             video_id = comment_data.get('video_id', VIDEO_ID)
-            collection_name = f"video_{video_id}_comments"
+            collection_name = f"{video_id}_comments"
             collection = self.db[collection_name]
             document = {
                 **comment_data,
@@ -265,7 +265,7 @@ class SyncMongoDBWriter:
             
         try:
             video_id = summary_data.get('video_id', VIDEO_ID)
-            collection_name = f"video_{video_id}_summaries"
+            collection_name = f"{video_id}_summaries"
             collection = self.db[collection_name]
             
             
