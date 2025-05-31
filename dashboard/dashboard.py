@@ -293,12 +293,13 @@ class Dashboard:
             window_end = safe_parse_timestamp(summary["window_end"]).strftime("%H:%M")
             st.metric("Window", f"{window_start} - {window_end}")
 
+        unique_key = f"latest_summary_{uuid.uuid4()}"
         st.text_area(
             "Summary",
             summary["summary"],
             height=300,
             disabled=True,
-            key=f"latest_summary_{uuid.uuid4()}",
+            key=unique_key,
         )
 
         if "sentiment_distribution" in summary:
@@ -369,12 +370,36 @@ def main():
     st.sidebar.title("⚙️ Settings")
     auto_refresh = st.sidebar.checkbox("Auto Refresh", value=True)
     refresh_interval = st.sidebar.slider("Refresh Interval (seconds)", 3, 10, 3)
-    sidebar_status = st.sidebar.empty()  
-
+    sidebar_status = st.sidebar.empty()
+    
     if auto_refresh:
-        placeholder = st.empty()
+        # Area yang akan di-refresh otomatis (real-time metrics)
+        realtime_placeholder = st.empty()
+        
+        # Area summary dengan refresh otomatis berdasarkan SUMMARY_WINDOW_MINUTES
+        st.header("📋 Comment Summaries")
+        tab1, tab2 = st.tabs(["Latest Summary", "Summary History"])
+        with tab1:
+            summary_placeholder = st.empty()
+            with summary_placeholder.container():
+                dashboard.render_latest_summary()
+        with tab2:
+            history_placeholder = st.empty()
+            with history_placeholder.container():
+                dashboard.render_summary_history()
+        
+        # Hitung interval refresh untuk summary (dalam detik)
+        summary_refresh_interval = (config.SUMMARY_WINDOW_MINUTES * 60) + 5
+        
+        # Variabel untuk tracking waktu refresh summary
+        last_summary_refresh = time.time()
+        
+        # Loop auto-refresh
         while True:
-            with placeholder.container():
+            current_time = time.time()
+            
+            # Refresh real-time metrics setiap refresh_interval
+            with realtime_placeholder.container():
                 st.header("📊 Real-time Metrics")
                 dashboard.render_metrics()
                 col1, col2 = st.columns([1, 2])
@@ -383,16 +408,19 @@ def main():
                 with col2:
                     st.subheader("💬 Recent Comments")
                     dashboard.render_recent_comments()
-                st.header("📋 Comment Summaries")
-                tab1, tab2 = st.tabs(["Latest Summary", "Summary History"])
-                with tab1:
-                    dashboard.render_latest_summary()
-                with tab2:
-                    dashboard.render_summary_history()
 
                 sidebar_status.success(
-                    f"Last updated: {datetime.now().strftime('%H:%M:%S')}"
+                    f"Last updated: {datetime.now().strftime('%H:%M:%S')} \n\n"
+                    f"Summary refresh in: {int(summary_refresh_interval - (current_time - last_summary_refresh))}s"
                 )
+            
+            # Refresh summary jika sudah waktunya
+            if current_time - last_summary_refresh >= summary_refresh_interval:
+                with summary_placeholder.container():
+                    dashboard.render_latest_summary()
+                with history_placeholder.container():
+                    dashboard.render_summary_history()
+                last_summary_refresh = current_time
 
             time.sleep(refresh_interval)
     else:
