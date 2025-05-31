@@ -51,12 +51,14 @@ def safe_parse_timestamp(timestamp_str):
         )
         return datetime.now()
 
+
 st.set_page_config(
     page_title="YouTube Live Stream Analytics",
     page_icon="📺",
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
 
 class Dashboard:
     def __init__(self):
@@ -138,105 +140,138 @@ class Dashboard:
             "comment_cleaner": {"status": "🔴", "details": "Not running"},
             "sentiment_analyzer": {"status": "🔴", "details": "Not running"},
             "comment_summarizer": {"status": "🔴", "details": "Not running"},
-            "streamlit_dashboard": {"status": "🔴", "details": "Not running"}
+            "streamlit_dashboard": {"status": "🔴", "details": "Not running"},
         }
-        
+
         try:
-            # Get all running processes
-            for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+
+            for proc in psutil.process_iter(["pid", "name", "cmdline"]):
                 try:
-                    cmdline = proc.info['cmdline']
+                    cmdline = proc.info["cmdline"]
                     if not cmdline:
                         continue
-                    
-                    cmdline_str = ' '.join(cmdline).lower()
-                    
-                    # Check for YouTube API process
-                    if 'youtube_api.py' in cmdline_str:
-                        processes["youtube_api"] = {"status": "🟢", "details": f"Running  \n(PID: {proc.info['pid']})"}
-                    
-                    # Check for Comment Cleaner process
-                    elif 'comment_cleaner.py' in cmdline_str:
-                        processes["comment_cleaner"] = {"status": "🟢", "details": f"Running  \n(PID: {proc.info['pid']})"}
-                    
-                    # Check for Sentiment Analyzer process
-                    elif 'sentiment_analyzer.py' in cmdline_str:
-                        processes["sentiment_analyzer"] = {"status": "🟢", "details": f"Running  \n(PID: {proc.info['pid']})"}
-                    
-                    # Check for Comment Summarizer process
-                    elif 'comment_summarizer.py' in cmdline_str:
-                        processes["comment_summarizer"] = {"status": "🟢", "details": f"Running  \n(PID: {proc.info['pid']})"}
-                    
-                    # Check for Streamlit Dashboard process (exclude current process)
-                    elif 'streamlit' in cmdline_str :
-                        processes["streamlit_dashboard"] = {"status": "🟢", "details": f"Running  \n(PID: {proc.info['pid']})"}
-                        
-                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+
+                    cmdline_str = " ".join(cmdline).lower()
+
+                    if "youtube_api.py" in cmdline_str:
+                        processes["youtube_api"] = {
+                            "status": "🟢",
+                            "details": f"Running  \n(PID: {proc.info['pid']})",
+                        }
+
+                    elif "comment_cleaner.py" in cmdline_str:
+                        processes["comment_cleaner"] = {
+                            "status": "🟢",
+                            "details": f"Running  \n(PID: {proc.info['pid']})",
+                        }
+
+                    elif "sentiment_analyzer.py" in cmdline_str:
+                        processes["sentiment_analyzer"] = {
+                            "status": "🟢",
+                            "details": f"Running  \n(PID: {proc.info['pid']})",
+                        }
+
+                    elif "comment_summarizer.py" in cmdline_str:
+                        processes["comment_summarizer"] = {
+                            "status": "🟢",
+                            "details": f"Running  \n(PID: {proc.info['pid']})",
+                        }
+
+                    elif "streamlit" in cmdline_str:
+                        processes["streamlit_dashboard"] = {
+                            "status": "🟢",
+                            "details": f"Running  \n(PID: {proc.info['pid']})",
+                        }
+
+                except (
+                    psutil.NoSuchProcess,
+                    psutil.AccessDenied,
+                    psutil.ZombieProcess,
+                ):
                     continue
-                    
+
         except Exception as e:
-            # If psutil fails, fallback to basic process check
+
             for process_name in processes.keys():
-                processes[process_name] = {"status": "⚠️", "details": f"Cannot check: {str(e)[:30]}"}
-        
+                processes[process_name] = {
+                    "status": "⚠️",
+                    "details": f"Cannot check: {str(e)[:30]}",
+                }
+
         return processes
 
     def check_connection_status(self):
-        # Check basic connections
+
         connection_status = {
             "redis": {"status": "🔴", "details": "Not connected"},
             "mongodb": {"status": "🔴", "details": "Not connected"},
-            "youtube_api": {"status": "🔴", "details": "Not tested"}
+            "youtube_api": {"status": "🔴", "details": "Not tested"},
         }
-        
+
         try:
             self.redis_client.ping()
             connection_status["redis"] = {"status": "🟢", "details": "Connected"}
         except Exception as e:
-            connection_status["redis"] = {"status": "🔴", "details": f"Error: {str(e)[:50]}"}
-        
+            connection_status["redis"] = {
+                "status": "🔴",
+                "details": f"Error: {str(e)[:50]}",
+            }
+
         try:
             if self.mongo_client:
-                self.mongo_client.admin.command('ping')
+                self.mongo_client.admin.command("ping")
                 connection_status["mongodb"] = {"status": "🟢", "details": "Connected"}
             else:
-                connection_status["mongodb"] = {"status": "🔴", "details": "Client not initialized"}
+                connection_status["mongodb"] = {
+                    "status": "🔴",
+                    "details": "Client not initialized",
+                }
         except Exception as e:
-            connection_status["mongodb"] = {"status": "🔴", "details": f"Error: {str(e)[:50]}"}
-        
+            connection_status["mongodb"] = {
+                "status": "🔴",
+                "details": f"Error: {str(e)[:50]}",
+            }
+
         try:
             url = f"https://www.googleapis.com/youtube/v3/videos?part=snippet&id={config.VIDEO_ID}&key={config.YOUTUBE_API_KEY}"
             response = requests.get(url, timeout=5)
             if response.status_code == 200:
-                connection_status["youtube_api"] = {"status": "🟢", "details": "API responding"}
+                connection_status["youtube_api"] = {
+                    "status": "🟢",
+                    "details": "API responding",
+                }
             else:
-                connection_status["youtube_api"] = {"status": "🔴", "details": f"HTTP {response.status_code}"}
+                connection_status["youtube_api"] = {
+                    "status": "🔴",
+                    "details": f"HTTP {response.status_code}",
+                }
         except Exception as e:
-            connection_status["youtube_api"] = {"status": "🔴", "details": f"Error: {str(e)[:50]}"}
-        
-        # Check process status
+            connection_status["youtube_api"] = {
+                "status": "🔴",
+                "details": f"Error: {str(e)[:50]}",
+            }
+
         process_status = self.check_process_status()
-        
-        # Combine both statuses
+
         combined_status = {
             "connections": connection_status,
-            "processes": process_status
+            "processes": process_status,
         }
-        
+
         return combined_status
 
     def export_data_to_csv(self):
         try:
-            comments = self.get_recent_comments(limit=1000)  
+            comments = self.get_recent_comments(limit=1000)
             if not comments:
                 return None
-            
+
             df = pd.DataFrame(comments)
-            
+
             csv_buffer = io.StringIO()
             df.to_csv(csv_buffer, index=False)
             csv_data = csv_buffer.getvalue()
-            
+
             return csv_data
         except Exception as e:
             st.error(f"Error exporting to CSV: {e}")
@@ -244,18 +279,18 @@ class Dashboard:
 
     def export_data_to_json(self):
         try:
-            comments = self.get_recent_comments(limit=1000)  
+            comments = self.get_recent_comments(limit=1000)
             if not comments:
                 return None
-            
+
             export_data = {
                 "export_timestamp": datetime.now().isoformat(),
                 "video_id": config.VIDEO_ID,
                 "total_comments": len(comments),
                 "sentiment_counts": self.get_sentiment_counts(),
-                "comments": comments
+                "comments": comments,
             }
-            
+
             return json.dumps(export_data, indent=2, ensure_ascii=False)
         except Exception as e:
             st.error(f"Error exporting to JSON: {e}")
@@ -672,7 +707,8 @@ class Dashboard:
         with st.container():
             st.markdown(f"### 📺 {video_info['title']}")
             st.markdown(
-                f"**Channel:** {video_info['channel']} | **Video ID:** `{config.VIDEO_ID}`"            )
+                f"**Channel:** {video_info['channel']} | **Video ID:** `{config.VIDEO_ID}`"
+            )
             if video_info["published_at"]:
                 published_date = datetime.fromisoformat(
                     video_info["published_at"].replace("Z", "+00:00")
@@ -680,45 +716,55 @@ class Dashboard:
                 st.markdown(f"**Published:** {published_date}")
 
     def render_sidebar_system_monitoring(self):
-        st.sidebar.header("🔧 System Monitoring")
-        
-        # Get combined status
+        st.sidebar.header("🖥️ System Monitoring")
         status = self.check_connection_status()
-        
-        # Connection Status Section
-        with st.sidebar.expander("🔗 Connection Status", expanded=False):
-            st.write("**Database & API Connections:**")
-            conn_status = status['connections']
-            st.write(f"**Redis:** {conn_status['redis']['status']} {conn_status['redis']['details']}")
-            st.write(f"**MongoDB:** {conn_status['mongodb']['status']} {conn_status['mongodb']['details']}")
-            st.write(f"**YouTube API:** {conn_status['youtube_api']['status']} {conn_status['youtube_api']['details']}")
-        
-        # Process Status Section
-        with st.sidebar.expander("🖥️ Process Status", expanded=False):
+
+        with st.sidebar.expander("🗨️ Process Status", expanded=False):
             st.write("**System Processes :**")
-            proc_status = status['processes']
-            
-            # Service processes
-            st.write(f"**YouTube API:** {proc_status['youtube_api']['status']} {proc_status['youtube_api']['details']}")
-            st.write(f"**Comment Cleaner:** {proc_status['comment_cleaner']['status']} {proc_status['comment_cleaner']['details']}")
-            st.write(f"**Sentiment Analyzer:** {proc_status['sentiment_analyzer']['status']} {proc_status['sentiment_analyzer']['details']}")
-            st.write(f"**Comment Summarizer:** {proc_status['comment_summarizer']['status']} {proc_status['comment_summarizer']['details']}")
-            st.write(f"**Streamlit Dashboard:** {proc_status['streamlit_dashboard']['status']} {proc_status['streamlit_dashboard']['details']}")
-            
-            # Overall system health indicator
-            running_count = sum(1 for p in proc_status.values() if p['status'] == '🟢')
+            proc_status = status["processes"]
+
+            st.write(
+                f"**YouTube API:** {proc_status['youtube_api']['status']} {proc_status['youtube_api']['details']}"
+            )
+            st.write(
+                f"**Comment Cleaner:** {proc_status['comment_cleaner']['status']} {proc_status['comment_cleaner']['details']}"
+            )
+            st.write(
+                f"**Sentiment Analyzer:** {proc_status['sentiment_analyzer']['status']} {proc_status['sentiment_analyzer']['details']}"
+            )
+            st.write(
+                f"**Comment Summarizer:** {proc_status['comment_summarizer']['status']} {proc_status['comment_summarizer']['details']}"
+            )
+            st.write(
+                f"**Streamlit Dashboard:** {proc_status['streamlit_dashboard']['status']} {proc_status['streamlit_dashboard']['details']}"
+            )
+
+            running_count = sum(1 for p in proc_status.values() if p["status"] == "🟢")
             total_count = len(proc_status)
-            
+
             if running_count == total_count:
                 st.success(f"🟢 All processes running ({running_count}/{total_count})")
             elif running_count > 0:
                 st.warning(f"⚠️ Partial system running ({running_count}/{total_count})")
             else:
                 st.error(f"🔴 No processes running ({running_count}/{total_count})")
-        
+
+        with st.sidebar.expander("🔗 Connection Status", expanded=False):
+            st.write("**Database & API Connections:**")
+            conn_status = status["connections"]
+            st.write(
+                f"**Redis:** {conn_status['redis']['status']} {conn_status['redis']['details']}"
+            )
+            st.write(
+                f"**MongoDB:** {conn_status['mongodb']['status']} {conn_status['mongodb']['details']}"
+            )
+            st.write(
+                f"**YouTube API:** {conn_status['youtube_api']['status']} {conn_status['youtube_api']['details']}"
+            )
+
         with st.sidebar.expander("📤 Export Options", expanded=False):
             col1, col2 = st.columns(2)
-            
+
             with col1:
                 if st.button("📊 CSV", use_container_width=True):
                     csv_data = self.export_data_to_csv()
@@ -728,9 +774,9 @@ class Dashboard:
                             data=csv_data,
                             file_name=f"youtube_comments_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                             mime="text/csv",
-                            use_container_width=True
+                            use_container_width=True,
                         )
-            
+
             with col2:
                 if st.button("📋 JSON", use_container_width=True):
                     json_data = self.export_data_to_json()
@@ -740,32 +786,37 @@ class Dashboard:
                             data=json_data,
                             file_name=f"youtube_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
                             mime="application/json",
-                            use_container_width=True
+                            use_container_width=True,
                         )
         with st.sidebar.expander("⚡ Quick Actions", expanded=False):
             if st.button("🔄 Refresh Connections", use_container_width=True):
                 st.rerun()
-            
+
             if st.button("🗑️ Clear Cache", use_container_width=True):
                 try:
-                    keys_to_delete = self.redis_client.keys(f"{config.SENTIMENT_CACHE_KEY}*")
+                    keys_to_delete = self.redis_client.keys(
+                        f"{config.SENTIMENT_CACHE_KEY}*"
+                    )
                     if keys_to_delete:
                         self.redis_client.delete(*keys_to_delete)
                         st.success(f"Cleared {len(keys_to_delete)} cache keys")
-                    else:                    st.info("No cache keys to clear")
+                    else:
+                        st.info("No cache keys to clear")
                 except Exception as e:
                     st.error(f"Error clearing cache: {e}")
-            
+
             if st.button("📈 System Health Check", use_container_width=True):
                 st.info("Running system health check...")
                 status = self.check_connection_status()
-                
-                conn_status = status['connections']
+
+                conn_status = status["connections"]
                 all_connected = all(s["status"] == "🟢" for s in conn_status.values())
-                
-                proc_status = status['processes']
-                all_processes_running = all(s["status"] == "🟢" for s in proc_status.values())
-                
+
+                proc_status = status["processes"]
+                all_processes_running = all(
+                    s["status"] == "🟢" for s in proc_status.values()
+                )
+
                 if all_connected and all_processes_running:
                     st.success("🟢 All systems operational!")
                 elif all_connected and not all_processes_running:
@@ -774,13 +825,11 @@ class Dashboard:
                     st.warning("⚠️ Processes OK, but some connections have issues")
                 else:
                     st.error("🔴 Multiple system issues detected")
-        
-        st.sidebar.divider()
+
 def main():
     svg_icon = """
     <svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" fill="red" style="vertical-align:middle;" class="bi bi-youtube" viewBox="0 0 16 16">
-    <path d="M8.051 1.999h.089c.822.003 4.987.033 6.11.335a2.01 2.01 0 0 1 1.415 1.42c.101.38.172.883.22 1.402l.01.104.022.26.008.104c.065.914.073 1.77.074 1.957v.075c-.001.194-.01 1.108-.082 2.06l-.008.105-.009.104c-.05.572-.124 1.14-.235 1.558a2.01 2.01 0 0 1-1.415 1.42c-1.16.312-5.569.334-6.18.335h-.142c-.309 0-1.587-.006-2.927-.052l-.17-.006-.087-.004-.171-.007-.171-.007c-1.11-.049-2.167-.128-2.654-.26a2.01 2.01 0 0 1-1.415-1.419c-.111-.417-.185-.986-.235-1.558L.09 9.82l-.008-.104A31 31 0 0 1 0 7.68v-.123c.002-.215.01-.958.064-1.778l.007-.103.003-.052.008-.104.022-.26.01-.104c.048-.519.119-1.023.22-1.402a2.01 2.01 0 0 1 1.415-1.42c.487-.13 1.544-.21 2.654-.26l.17-.007.172-.006.086-.003.171-.007A100 100 0 0 1 7.858 2zM6.4 5.209v4.818l4.157-2.408z"/>
-    </svg>
+    <path d="M8.051 1.999h.089c.822.003 4.987.033 6.11.335a2.01 2.01 0 0 1 1.415 1.42c.101.38.172.883.22 1.402l.01.104.022.26.008.104c.065.914.073 1.77.074 1.957v.075c-.001.194-.01 1.108-.082 2.06l-.008.105-.009.104c-.05.572-.124 1.14-.235 1.558a2.01 2.01 0 0 1-1.415 1.42c-1.16.312-5.569.334-6.18.335h-.142c-.309 0-1.587-.006-2.927-.052l-.17-.006-.087-.004-.171-.007-.171-.007c-1.11-.049-2.167-.128-2.654-.26a2.01 2.01 0 0 1-1.415-1.419c-.111-.417-.185-.986-.235-1.558L.09 9.82l-.008-.104A31 31 0 0 1 0 7.68v-.123c.002-.215.01-.958.064-1.778l.007-.103.003-.052.008-.104.022-.26.01-.104c.048-.519.119-1.023.22-1.402a2.01 2.01 0 0 1 1.415-1.42c.487-.13 1.544-.21 2.654-.26l.17-.007.172-.006.086-.003.171-.007A100 100 0 0 1 7.858 2zM6.4 5.209v4.818l4.157-2.408z"/>    </svg>
     """
 
     st.markdown(
@@ -788,19 +837,41 @@ def main():
     <h1>{svg_icon} YouTube Live Stream Analytics</h1>
     """,
         unsafe_allow_html=True,
-    )    
+    )
     dashboard = Dashboard()
-    
+
     dashboard.render_video_info()
     st.divider()
-    
-    st.sidebar.title("⚙️ Settings")
-    auto_refresh = st.sidebar.checkbox("Auto Refresh", value=True)
-    refresh_interval = st.sidebar.slider("Refresh Interval (seconds)", 3, 10, 3)
-    sidebar_status = st.sidebar.empty()
-    
-    dashboard.render_sidebar_system_monitoring()
+    css = """
+    <style>
+        div[data-baseweb="slider"] {
+            margin-left:5px !important;
+        }
+        div[data-testid="stSidebarUserContent"] {
+            padding-top: 40px !important;
+        }
+        section[data-testid="stSidebar"] h1 {
+            margin-top: 0px !important;
+        }
+    </style>
+    """
+    st.markdown(css, unsafe_allow_html=True)
+    st.sidebar.header("⚙️ System Setting")
 
+    with st.sidebar.expander("⚙️ Settings", expanded=True):
+        auto_refresh = st.checkbox("Auto Refresh", value=True)
+        refresh_interval = st.slider("Refresh Interval (seconds)", 3, 10, 3)
+
+    sidebar_status = st.sidebar.empty()
+    st.sidebar.markdown(
+        """<hr style="margin-top:15px; margin-bottom: 0; !important">""",
+        unsafe_allow_html=True
+    )
+    dashboard.render_sidebar_system_monitoring()
+    st.sidebar.markdown(
+        """<hr style="margin-top:15px; margin-bottom: 0; !important">""",
+        unsafe_allow_html=True
+    )
     if auto_refresh:
         realtime_placeholder = st.empty()
         st.header("📋 Comment Summaries")
@@ -830,10 +901,35 @@ def main():
                 with col2:
                     st.subheader("💬 Recent Comments")
                     dashboard.render_recent_comments()
+                current_timestamp = datetime.now().strftime("%H:%M:%S")
+                time_until_refresh = int(
+                    summary_refresh_interval - (current_time - last_summary_refresh)
+                )
 
-                sidebar_status.success(
-                    f"Last updated: {datetime.now().strftime('%H:%M:%S')}  \n"
-                    f"Summary refresh in: {int(summary_refresh_interval - (current_time - last_summary_refresh))}s"
+                sidebar_status.markdown(
+                    f"""
+                    <div style="
+                        padding: 15px;
+                        margin-bottom: 10px;
+                        border-style: solid;
+                        border-width: 1px;
+                        border-color: rgba(250, 250, 250, 0.2);
+                        border-radius: 0.5rem;
+                    ">
+                        <div style="color: white; font-weight: bold; margin-bottom: 8px;">
+                            🔄 <span style="font-size: 14px;">Refresh Status</span>
+                        </div>
+                        <div style="color: #f0f0f0; font-size: 13px; line-height: 1.5;">
+                            <div style="margin-bottom: 5px;">
+                                ⏰ <strong>Last Updated:</strong> {current_timestamp}
+                            </div>
+                            <div style="margin-bottom: 5px;">
+                                📋 <strong>Summary Refresh:</strong> {time_until_refresh}
+                            </div>
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
                 )
 
             if current_time - last_summary_refresh >= summary_refresh_interval:
