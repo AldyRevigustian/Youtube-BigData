@@ -1,5 +1,4 @@
 import json
-import redis
 import schedule
 import time
 from kafka import KafkaConsumer
@@ -15,7 +14,6 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import config
 from database.mongodb_writer import write_to_mongodb_background
 
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -23,12 +21,6 @@ logger = logging.getLogger(__name__)
 class CommentSummarizer:
     def __init__(self):
         self.gemini_client = genai.Client(api_key=config.GEMINI_API_KEY)
-        self.redis_client = redis.Redis(
-            host=config.REDIS_HOST,
-            port=config.REDIS_PORT,
-            db=config.REDIS_DB,
-            decode_responses=True,
-        )
         self.consumer = KafkaConsumer(
             config.SENTIMENT_RESULTS_TOPIC,
             bootstrap_servers=config.KAFKA_BOOTSTRAP_SERVERS,
@@ -87,7 +79,6 @@ class CommentSummarizer:
                     sum(confidences) / len(confidences) if confidences else 0
                 ),
             }
-
         return sentiment_stats
 
     def process_batch_summary(self):
@@ -96,12 +87,9 @@ class CommentSummarizer:
             return
 
         logger.info(f"Processing batch summary for {len(self.comment_buffer)} comments")
-
         try:
             summary = self.generate_summary(self.comment_buffer)
-
             sentiment_stats = self.analyze_sentiment_distribution(self.comment_buffer)
-
             summary_data = {
                 "timestamp": datetime.now().isoformat(),
                 "window_start": (
@@ -112,41 +100,24 @@ class CommentSummarizer:
                 "summary": summary,
                 "sentiment_distribution": sentiment_stats,
                 "video_id": config.VIDEO_ID,
-            }            
-            self.cache_summary(summary_data)
+            }
+            self.save_to_mongodb(summary_data)
             self.comment_buffer.clear()
 
             logger.info("Batch summary processed successfully")
-            
+
         except Exception as e:
             logger.error(f"Error processing batch summary: {e}")
 
-    def cache_summary(self, summary_data):
+    def save_to_mongodb(self, summary_data):
         try:
-            self.redis_client.setex(
-                f"{config.SUMMARY_CACHE_KEY}:latest",
-                config.CACHE_EXPIRY_SECONDS * 2,
-                json.dumps(summary_data),
+            write_to_mongodb_background(summary_data, "summary")
+            logger.info(
+                f"📝 MongoDB write scheduled for summary at {summary_data['timestamp']}"
             )
-
-            timestamp = datetime.now().timestamp()
-            summary_id = f"summary_{int(timestamp)}"
-
-            self.redis_client.setex(
-                f"{config.SUMMARY_CACHE_KEY}:{summary_id}",
-                config.CACHE_EXPIRY_SECONDS * 2,
-                json.dumps(summary_data),
-            )
-
-            self.redis_client.zadd(
-                f"{config.SUMMARY_CACHE_KEY}:timeline", {summary_id: timestamp}
-            )
-            logger.info(f"✅ Redis cache updated for summary: {summary_id}")
-            write_to_mongodb_background(summary_data, 'summary')
-            logger.info(f"📝 MongoDB write scheduled for summary: {summary_id}")
 
         except Exception as e:
-            logger.error(f"Error caching summary: {e}")
+            logger.error(f"Error saving summary to MongoDB: {e}")
 
     def schedule_summaries(self):
         schedule.every(config.SUMMARY_WINDOW_MINUTES).minutes.do(
@@ -223,47 +194,47 @@ Struktur ringkasan harus mencakup lima aspek berikut ini:
 Gunakan bahasa Indonesia yang lugas dan mudah dipahami. Panjang ringkasan maksimal 300 kata. Tulis ringkasan dengan gaya deskriptif yang konsisten dan rapi agar mudah dianalisis lebih lanjut.
 """
 
-#             prompt = f"""
-# Analisis dan buatkan ringkasan dari komentar YouTube live streaming berikut dengan FORMAT TETAP:
+            #             prompt = f"""
+            # Analisis dan buatkan ringkasan dari komentar YouTube live streaming berikut dengan FORMAT TETAP:
 
-# === DATA STATISTIK ===
-# - Positif: {stats['positive']} ({stats.get('positive_pct', 0):.1f}%)
-# - Negatif: {stats['negative']} ({stats.get('negative_pct', 0):.1f}%)
-# - Netral: {stats['neutral']} ({stats.get('neutral_pct', 0):.1f}%)
-# Total Komentar: {len(comment_texts)}
+            # === DATA STATISTIK ===
+            # - Positif: {stats['positive']} ({stats.get('positive_pct', 0):.1f}%)
+            # - Negatif: {stats['negative']} ({stats.get('negative_pct', 0):.1f}%)
+            # - Netral: {stats['neutral']} ({stats.get('neutral_pct', 0):.1f}%)
+            # Total Komentar: {len(comment_texts)}
 
-# === KOMENTAR ===
-# {comments_str}
+            # === KOMENTAR ===
+            # {comments_str}
 
-# INSTRUKSI ANALISIS (WAJIB DIIKUTI):
-# Buatlah ringkasan dengan struktur TEPAT seperti ini:
+            # INSTRUKSI ANALISIS (WAJIB DIIKUTI):
+            # Buatlah ringkasan dengan struktur TEPAT seperti ini:
 
-# ## RINGKASAN ANALISIS KOMENTAR YOUTUBE
+            # ## RINGKASAN ANALISIS KOMENTAR YOUTUBE
 
-# ### 1. GAMBARAN SENTIMEN
-# [Jelaskan dominasi sentimen berdasarkan persentase tertinggi - apakah mayoritas positif/negatif/netral. Maksimal 2 kalimat.]
+            # ### 1. GAMBARAN SENTIMEN
+            # [Jelaskan dominasi sentimen berdasarkan persentase tertinggi - apakah mayoritas positif/negatif/netral. Maksimal 2 kalimat.]
 
-# ### 2. TOPIK UTAMA DISKUSI
-# [Sebutkan 3-5 topik utama yang paling sering dibahas penonton. Format: bullet point dengan penjelasan singkat.]
+            # ### 2. TOPIK UTAMA DISKUSI
+            # [Sebutkan 3-5 topik utama yang paling sering dibahas penonton. Format: bullet point dengan penjelasan singkat.]
 
-# ### 3. KOMENTAR HIGHLIGHT
-# [Pilih 2-3 komentar paling representatif/menarik. Kutip langsung dan jelaskan mengapa penting. Format: "Komentar: [kutipan]" - Alasan: [penjelasan]]
+            # ### 3. KOMENTAR HIGHLIGHT
+            # [Pilih 2-3 komentar paling representatif/menarik. Kutip langsung dan jelaskan mengapa penting. Format: "Komentar: [kutipan]" - Alasan: [penjelasan]]
 
-# ### 4. MOOD DAN REAKSI AUDIENS
-# [Deskripsikan suasana hati umum penonton dan reaksi mereka terhadap konten. Maksimal 3 kalimat.]
+            # ### 4. MOOD DAN REAKSI AUDIENS
+            # [Deskripsikan suasana hati umum penonton dan reaksi mereka terhadap konten. Maksimal 3 kalimat.]
 
-# ### 5. POLA INTERAKSI
-# [Identifikasi tren komunikasi, frekuensi komentar, atau pola perilaku yang terlihat. Maksimal 2 kalimat.]
+            # ### 5. POLA INTERAKSI
+            # [Identifikasi tren komunikasi, frekuensi komentar, atau pola perilaku yang terlihat. Maksimal 2 kalimat.]
 
-# KETENTUAN WAJIB:
-# - Gunakan struktur heading dan subheading persis seperti contoh
-# - Setiap bagian maksimal sesuai batasan yang ditentukan
-# - Total ringkasan maksimal 300 kata
-# - Gunakan bahasa Indonesia formal namun mudah dipahami
-# - Jangan tambah atau kurangi bagian struktur
-# - Gunakan data statistik sebagai dasar analisis
-# - Fokus pada fakta objektif, hindari asumsi berlebihan
-# """
+            # KETENTUAN WAJIB:
+            # - Gunakan struktur heading dan subheading persis seperti contoh
+            # - Setiap bagian maksimal sesuai batasan yang ditentukan
+            # - Total ringkasan maksimal 300 kata
+            # - Gunakan bahasa Indonesia formal namun mudah dipahami
+            # - Jangan tambah atau kurangi bagian struktur
+            # - Gunakan data statistik sebagai dasar analisis
+            # - Fokus pada fakta objektif, hindari asumsi berlebihan
+            # """
             response = self.gemini_client.models.generate_content(
                 model="gemini-2.0-flash", contents=prompt
             )

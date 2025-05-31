@@ -484,7 +484,6 @@ class Dashboard:
                 ).strftime("%d %B %Y")
                 st.markdown(f"**Published:** {published_date}")
 
-
 def main():
     svg_icon = """
     <svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" fill="red" style="vertical-align:middle;" class="bi bi-youtube" viewBox="0 0 16 16">
