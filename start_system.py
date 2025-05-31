@@ -2,11 +2,66 @@ import subprocess
 import os
 import time
 import sys
+import redis
+from config import config
+
+
+def clear_redis_cache():
+    """Menghapus semua cache Redis sebelum memulai sistem"""
+    try:
+        print("🧹 Clearing Redis cache...")
+        r = redis.Redis(
+            host=config.REDIS_HOST, 
+            port=config.REDIS_PORT, 
+            db=config.REDIS_DB,
+            decode_responses=True
+        )
+        
+        # Test koneksi Redis
+        r.ping()
+        
+        # Hapus keys yang terkait dengan aplikasi
+        app_keys = [
+            config.SENTIMENT_CACHE_KEY,
+            config.SUMMARY_CACHE_KEY,
+            "youtube_comments:*",
+            "sentiment:*",
+            "summary:*"
+        ]
+        
+        total_deleted = 0
+        for key_pattern in app_keys:
+            if '*' in key_pattern:
+                # Untuk pattern dengan wildcard
+                keys = r.keys(key_pattern)
+                if keys:
+                    deleted = r.delete(*keys)
+                    total_deleted += deleted
+            else:
+                # Untuk key spesifik
+                if r.exists(key_pattern):
+                    r.delete(key_pattern)
+                    total_deleted += 1
+        
+        if total_deleted > 0:
+            print(f"   ✅ Cleared {total_deleted} Redis cache entries")
+        else:
+            print("   ✅ No application cache found in Redis")
+            
+    except redis.ConnectionError as e:
+        print(f"   ⚠️  Warning: Could not connect to Redis ({e})")
+        print("   ℹ️  Redis cache clearing skipped - Redis might not be running yet")
+    except Exception as e:
+        print(f"   ⚠️  Warning: Failed to clear Redis cache: {e}")
 
 
 def start_services():
     print("🚀 Starting YouTube Sentiment Analysis System...")
     print("=" * 50)
+    
+    # Clear Redis cache before starting services
+    clear_redis_cache()
+    print()
 
     root_dir = os.path.dirname(os.path.abspath(__file__))
     services = [
@@ -67,6 +122,7 @@ def start_services():
 
 if __name__ == "__main__":
     try:
+        clear_redis_cache()  # Panggil fungsi untuk menghapus cache Redis
         processes = start_services()
 
         print("\n⏳ System running... Press Ctrl+C to exit")
