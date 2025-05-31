@@ -11,6 +11,10 @@ import os
 import requests
 import pymongo
 from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
+import io
+from typing import Dict, Any
+import subprocess
+import psutil
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import config
@@ -125,7 +129,137 @@ class Dashboard:
                             f"{config.SENTIMENT_CACHE_KEY}:counts:{sentiment}", count
                         )
         except Exception as e:
-            st.error(f"❌ Error loading data from MongoDB to Redis: {e}")
+            st.error(f"🔴 Error loading data from MongoDB to Redis: {e}")
+
+    def check_process_status(self):
+        """Check if system processes are running"""
+        processes = {
+            "youtube_api": {"status": "🔴", "details": "Not running"},
+            "comment_cleaner": {"status": "🔴", "details": "Not running"},
+            "sentiment_analyzer": {"status": "🔴", "details": "Not running"},
+            "comment_summarizer": {"status": "🔴", "details": "Not running"},
+            "streamlit_dashboard": {"status": "🔴", "details": "Not running"}
+        }
+        
+        try:
+            # Get all running processes
+            for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+                try:
+                    cmdline = proc.info['cmdline']
+                    if not cmdline:
+                        continue
+                    
+                    cmdline_str = ' '.join(cmdline).lower()
+                    
+                    # Check for YouTube API process
+                    if 'youtube_api.py' in cmdline_str:
+                        processes["youtube_api"] = {"status": "🟢", "details": f"Running  \n(PID: {proc.info['pid']})"}
+                    
+                    # Check for Comment Cleaner process
+                    elif 'comment_cleaner.py' in cmdline_str:
+                        processes["comment_cleaner"] = {"status": "🟢", "details": f"Running  \n(PID: {proc.info['pid']})"}
+                    
+                    # Check for Sentiment Analyzer process
+                    elif 'sentiment_analyzer.py' in cmdline_str:
+                        processes["sentiment_analyzer"] = {"status": "🟢", "details": f"Running  \n(PID: {proc.info['pid']})"}
+                    
+                    # Check for Comment Summarizer process
+                    elif 'comment_summarizer.py' in cmdline_str:
+                        processes["comment_summarizer"] = {"status": "🟢", "details": f"Running  \n(PID: {proc.info['pid']})"}
+                    
+                    # Check for Streamlit Dashboard process (exclude current process)
+                    elif 'streamlit' in cmdline_str :
+                        processes["streamlit_dashboard"] = {"status": "🟢", "details": f"Running  \n(PID: {proc.info['pid']})"}
+                        
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                    continue
+                    
+        except Exception as e:
+            # If psutil fails, fallback to basic process check
+            for process_name in processes.keys():
+                processes[process_name] = {"status": "⚠️", "details": f"Cannot check: {str(e)[:30]}"}
+        
+        return processes
+
+    def check_connection_status(self):
+        # Check basic connections
+        connection_status = {
+            "redis": {"status": "🔴", "details": "Not connected"},
+            "mongodb": {"status": "🔴", "details": "Not connected"},
+            "youtube_api": {"status": "🔴", "details": "Not tested"}
+        }
+        
+        try:
+            self.redis_client.ping()
+            connection_status["redis"] = {"status": "🟢", "details": "Connected"}
+        except Exception as e:
+            connection_status["redis"] = {"status": "🔴", "details": f"Error: {str(e)[:50]}"}
+        
+        try:
+            if self.mongo_client:
+                self.mongo_client.admin.command('ping')
+                connection_status["mongodb"] = {"status": "🟢", "details": "Connected"}
+            else:
+                connection_status["mongodb"] = {"status": "🔴", "details": "Client not initialized"}
+        except Exception as e:
+            connection_status["mongodb"] = {"status": "🔴", "details": f"Error: {str(e)[:50]}"}
+        
+        try:
+            url = f"https://www.googleapis.com/youtube/v3/videos?part=snippet&id={config.VIDEO_ID}&key={config.YOUTUBE_API_KEY}"
+            response = requests.get(url, timeout=5)
+            if response.status_code == 200:
+                connection_status["youtube_api"] = {"status": "🟢", "details": "API responding"}
+            else:
+                connection_status["youtube_api"] = {"status": "🔴", "details": f"HTTP {response.status_code}"}
+        except Exception as e:
+            connection_status["youtube_api"] = {"status": "🔴", "details": f"Error: {str(e)[:50]}"}
+        
+        # Check process status
+        process_status = self.check_process_status()
+        
+        # Combine both statuses
+        combined_status = {
+            "connections": connection_status,
+            "processes": process_status
+        }
+        
+        return combined_status
+
+    def export_data_to_csv(self):
+        try:
+            comments = self.get_recent_comments(limit=1000)  
+            if not comments:
+                return None
+            
+            df = pd.DataFrame(comments)
+            
+            csv_buffer = io.StringIO()
+            df.to_csv(csv_buffer, index=False)
+            csv_data = csv_buffer.getvalue()
+            
+            return csv_data
+        except Exception as e:
+            st.error(f"Error exporting to CSV: {e}")
+            return None
+
+    def export_data_to_json(self):
+        try:
+            comments = self.get_recent_comments(limit=1000)  
+            if not comments:
+                return None
+            
+            export_data = {
+                "export_timestamp": datetime.now().isoformat(),
+                "video_id": config.VIDEO_ID,
+                "total_comments": len(comments),
+                "sentiment_counts": self.get_sentiment_counts(),
+                "comments": comments
+            }
+            
+            return json.dumps(export_data, indent=2, ensure_ascii=False)
+        except Exception as e:
+            st.error(f"Error exporting to JSON: {e}")
+            return None
 
     def get_video_info(self):
         if self.video_info is not None:
@@ -267,7 +401,7 @@ class Dashboard:
             self.mongo_client.admin.command("ping")
             self.mongo_db = self.mongo_client[config.MONGODB_DATABASE]
         except (ConnectionFailure, ServerSelectionTimeoutError) as e:
-            st.error(f"❌ MongoDB connection failed: {e}")
+            st.error(f"🔴 MongoDB connection failed: {e}")
             self.mongo_client = None
             self.mongo_db = None
 
@@ -538,15 +672,110 @@ class Dashboard:
         with st.container():
             st.markdown(f"### 📺 {video_info['title']}")
             st.markdown(
-                f"**Channel:** {video_info['channel']} | **Video ID:** `{config.VIDEO_ID}`"
-            )
+                f"**Channel:** {video_info['channel']} | **Video ID:** `{config.VIDEO_ID}`"            )
             if video_info["published_at"]:
                 published_date = datetime.fromisoformat(
                     video_info["published_at"].replace("Z", "+00:00")
                 ).strftime("%d %B %Y")
                 st.markdown(f"**Published:** {published_date}")
 
-
+    def render_sidebar_system_monitoring(self):
+        st.sidebar.header("🔧 System Monitoring")
+        
+        # Get combined status
+        status = self.check_connection_status()
+        
+        # Connection Status Section
+        with st.sidebar.expander("🔗 Connection Status", expanded=False):
+            st.write("**Database & API Connections:**")
+            conn_status = status['connections']
+            st.write(f"**Redis:** {conn_status['redis']['status']} {conn_status['redis']['details']}")
+            st.write(f"**MongoDB:** {conn_status['mongodb']['status']} {conn_status['mongodb']['details']}")
+            st.write(f"**YouTube API:** {conn_status['youtube_api']['status']} {conn_status['youtube_api']['details']}")
+        
+        # Process Status Section
+        with st.sidebar.expander("🖥️ Process Status", expanded=False):
+            st.write("**System Processes :**")
+            proc_status = status['processes']
+            
+            # Service processes
+            st.write(f"**YouTube API:** {proc_status['youtube_api']['status']} {proc_status['youtube_api']['details']}")
+            st.write(f"**Comment Cleaner:** {proc_status['comment_cleaner']['status']} {proc_status['comment_cleaner']['details']}")
+            st.write(f"**Sentiment Analyzer:** {proc_status['sentiment_analyzer']['status']} {proc_status['sentiment_analyzer']['details']}")
+            st.write(f"**Comment Summarizer:** {proc_status['comment_summarizer']['status']} {proc_status['comment_summarizer']['details']}")
+            st.write(f"**Streamlit Dashboard:** {proc_status['streamlit_dashboard']['status']} {proc_status['streamlit_dashboard']['details']}")
+            
+            # Overall system health indicator
+            running_count = sum(1 for p in proc_status.values() if p['status'] == '🟢')
+            total_count = len(proc_status)
+            
+            if running_count == total_count:
+                st.success(f"🟢 All processes running ({running_count}/{total_count})")
+            elif running_count > 0:
+                st.warning(f"⚠️ Partial system running ({running_count}/{total_count})")
+            else:
+                st.error(f"🔴 No processes running ({running_count}/{total_count})")
+        
+        with st.sidebar.expander("📤 Export Options", expanded=False):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                if st.button("📊 CSV", use_container_width=True):
+                    csv_data = self.export_data_to_csv()
+                    if csv_data:
+                        st.download_button(
+                            label="Download CSV",
+                            data=csv_data,
+                            file_name=f"youtube_comments_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                            mime="text/csv",
+                            use_container_width=True
+                        )
+            
+            with col2:
+                if st.button("📋 JSON", use_container_width=True):
+                    json_data = self.export_data_to_json()
+                    if json_data:
+                        st.download_button(
+                            label="Download JSON",
+                            data=json_data,
+                            file_name=f"youtube_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                            mime="application/json",
+                            use_container_width=True
+                        )
+        with st.sidebar.expander("⚡ Quick Actions", expanded=False):
+            if st.button("🔄 Refresh Connections", use_container_width=True):
+                st.rerun()
+            
+            if st.button("🗑️ Clear Cache", use_container_width=True):
+                try:
+                    keys_to_delete = self.redis_client.keys(f"{config.SENTIMENT_CACHE_KEY}*")
+                    if keys_to_delete:
+                        self.redis_client.delete(*keys_to_delete)
+                        st.success(f"Cleared {len(keys_to_delete)} cache keys")
+                    else:                    st.info("No cache keys to clear")
+                except Exception as e:
+                    st.error(f"Error clearing cache: {e}")
+            
+            if st.button("📈 System Health Check", use_container_width=True):
+                st.info("Running system health check...")
+                status = self.check_connection_status()
+                
+                conn_status = status['connections']
+                all_connected = all(s["status"] == "🟢" for s in conn_status.values())
+                
+                proc_status = status['processes']
+                all_processes_running = all(s["status"] == "🟢" for s in proc_status.values())
+                
+                if all_connected and all_processes_running:
+                    st.success("🟢 All systems operational!")
+                elif all_connected and not all_processes_running:
+                    st.warning("⚠️ Connections OK, but some processes have issues")
+                elif not all_connected and all_processes_running:
+                    st.warning("⚠️ Processes OK, but some connections have issues")
+                else:
+                    st.error("🔴 Multiple system issues detected")
+        
+        st.sidebar.divider()
 def main():
     svg_icon = """
     <svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" fill="red" style="vertical-align:middle;" class="bi bi-youtube" viewBox="0 0 16 16">
@@ -559,16 +788,18 @@ def main():
     <h1>{svg_icon} YouTube Live Stream Analytics</h1>
     """,
         unsafe_allow_html=True,
-    )
-
+    )    
     dashboard = Dashboard()
-
+    
     dashboard.render_video_info()
     st.divider()
+    
     st.sidebar.title("⚙️ Settings")
     auto_refresh = st.sidebar.checkbox("Auto Refresh", value=True)
     refresh_interval = st.sidebar.slider("Refresh Interval (seconds)", 3, 10, 3)
     sidebar_status = st.sidebar.empty()
+    
+    dashboard.render_sidebar_system_monitoring()
 
     if auto_refresh:
         realtime_placeholder = st.empty()
@@ -601,7 +832,7 @@ def main():
                     dashboard.render_recent_comments()
 
                 sidebar_status.success(
-                    f"Last updated: {datetime.now().strftime('%H:%M:%S')} \n\n"
+                    f"Last updated: {datetime.now().strftime('%H:%M:%S')}  \n"
                     f"Summary refresh in: {int(summary_refresh_interval - (current_time - last_summary_refresh))}s"
                 )
 

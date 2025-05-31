@@ -1,5 +1,3 @@
-import os
-
 # YouTube API Configuration
 
 # YOUTUBE_API_KEY = "AIzaSyA-nKO01fRryKtTyhpuLjrAFD1TRTjCVzg"
