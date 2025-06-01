@@ -805,6 +805,7 @@ class Dashboard:
             """,
             unsafe_allow_html=True,
         )
+        plt.close(fig)
 
     def render_advanced_visualizations(self):
         st.subheader("📈 Sentiment Timeline")
