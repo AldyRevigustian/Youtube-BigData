@@ -115,7 +115,7 @@ class Dashboard:
                         comment_key = (
                             f"{config.SENTIMENT_CACHE_KEY}:{comment_data['comment_id']}"
                         )
-                        self.redis_client.set(comment_key, json.dumps(comment_data))
+                        self.redis_client.setex(comment_key, config.CACHE_EXPIRY_SECONDS, json.dumps(comment_data))
 
                         timestamp = safe_parse_timestamp(
                             comment_data["timestamp"]
@@ -417,7 +417,7 @@ class Dashboard:
             for doc in cursor:
 
                 comment = {
-                    "comment_id": str(doc.get("_id", "")),
+                    "comment_id": str(doc.get("id", "")),
                     "username": doc.get("username", "Unknown"),
                     "comment": doc.get("comment", ""),
                     "timestamp": (
@@ -437,7 +437,7 @@ class Dashboard:
 
     def get_hybrid_comments(self, limit=100):
         redis_comments = self.get_recent_comments(limit)
-        if len(redis_comments) >= min(limit, 50):
+        if len(redis_comments) >= min(limit, 500):
             for comment in redis_comments:
                 comment["_data_source"] = "redis"
             return redis_comments
@@ -645,11 +645,13 @@ class Dashboard:
             st.info("No data available for sentiment timeline")
             return
 
+        self.render_data_source_info(comments)
+        
         df = pd.DataFrame(comments)
         df["timestamp"] = pd.to_datetime(df["timestamp"])
         df = df.sort_values("timestamp")
 
-        df["time_group"] = df["timestamp"].dt.floor("180s")
+        df["time_group"] = df["timestamp"].dt.floor("300s")
 
         sentiment_timeline = (
             df.groupby(["time_group", "sentiment"]).size().unstack(fill_value=0)
@@ -714,7 +716,6 @@ class Dashboard:
             st.info("No data available for top active users")
             return
 
-        # self.render_data_source_info(comments, "Top Active Users")
         df = pd.DataFrame(comments)
         user_counts = df["username"].value_counts().head(10)
 
@@ -1072,7 +1073,7 @@ class Dashboard:
                 icon = {"redis": "⚡", "mongodb": "🗄️", "unknown": "❓"}.get(
                     source, "❓"
                 )
-                source_info.append(f"{icon} {source.title()}: {count}")
+            source_info.append(f"{icon} {source.title()}: {count}")
 
             info_text = f"**{chart_title} Data Source:** " + " | ".join(source_info)
             st.caption(info_text)
@@ -1116,7 +1117,7 @@ def main():
         # data_limit = st.slider("Data Limit for Analytics", 1000, 5000, 1000, step=1000)
         data_limit = st.selectbox(
             "📊 Data Limit for Analytics",        
-            options=[1000, 2000, 300, 4000, 5000],
+            options=[1000, 2000, 5000, 10000, 20000],
             index=0,  # default to 1000
         )
 
