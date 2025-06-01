@@ -21,10 +21,15 @@ from wordcloud import WordCloud
 import matplotlib.pyplot as plt
 import seaborn as sns
 import re
+import warnings
+import uuid
+from io import BytesIO
+import base64
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import config
-import uuid
+
+warnings.filterwarnings("ignore", category=FutureWarning)
 
 
 def safe_parse_timestamp(timestamp_str):
@@ -256,7 +261,7 @@ class Dashboard:
         }
 
         return combined_status
-    
+
     def export_data_to_csv(self):
         try:
             comments = self.get_hybrid_comments(limit=1000)
@@ -273,7 +278,7 @@ class Dashboard:
         except Exception as e:
             st.error(f"Error exporting to CSV: {e}")
             return None
-    
+
     def export_data_to_json(self):
         try:
             comments = self.get_hybrid_comments(limit=1000)
@@ -398,47 +403,49 @@ class Dashboard:
         try:
             comments_collection_name = f"{config.VIDEO_ID}_comments"
             comments_collection = self.mongo_db[comments_collection_name]
-            
-            
+
             query = {}
             if hours_back:
                 cutoff_time = datetime.now() - timedelta(hours=hours_back)
                 query["timestamp"] = {"$gte": cutoff_time}
-            
-            
+
             cursor = comments_collection.find(query).sort("timestamp", -1)
-            
+
             if limit:
                 cursor = cursor.limit(limit)
-            
+
             comments = []
             for doc in cursor:
-                
+
                 comment = {
                     "comment_id": str(doc.get("_id", "")),
                     "username": doc.get("username", "Unknown"),
                     "comment": doc.get("comment", ""),
-                    "timestamp": doc.get("timestamp", datetime.now()).isoformat() if hasattr(doc.get("timestamp"), "isoformat") else str(doc.get("timestamp", "")),
+                    "timestamp": (
+                        doc.get("timestamp", datetime.now()).isoformat()
+                        if hasattr(doc.get("timestamp"), "isoformat")
+                        else str(doc.get("timestamp", ""))
+                    ),
                     "sentiment": doc.get("sentiment", "neutral"),
-                    "confidence": doc.get("confidence", 0.0)
+                    "confidence": doc.get("confidence", 0.0),
                 }
                 comments.append(comment)
             return comments
-            
+
         except Exception as e:
             st.error(f"Error getting comments from MongoDB: {e}")
             return []
 
     def get_hybrid_comments(self, limit=100):
         redis_comments = self.get_recent_comments(limit)
-        if len(redis_comments) >= min(limit, 50):  
+        if len(redis_comments) >= min(limit, 50):
             for comment in redis_comments:
-                comment['_data_source'] = 'redis'
+                comment["_data_source"] = "redis"
             return redis_comments
         else:
             mongodb_comments = self.get_comments_from_mongodb(limit)
             for comment in mongodb_comments:
-                comment['_data_source'] = 'mongodb'
+                comment["_data_source"] = "mongodb"
             return mongodb_comments
 
     def get_latest_summary(self):
@@ -577,7 +584,6 @@ class Dashboard:
         fig = px.pie(
             values=list(sentiment_counts.values()),
             names=labels,
-            title="Sentiment Distribution",
             color=labels,
             color_discrete_map={
                 "Positive": "#6BCB77",
@@ -591,16 +597,37 @@ class Dashboard:
             textinfo="percent+label",
             textfont=dict(color="white"),
         )
-        st.plotly_chart(fig, use_container_width=True)      
+        
+        fig.update_layout(
+            title={
+                "text": "🤖 Sentiment Distribution",
+                "x": 0.5,
+                "xanchor": "center",
+                "font": {"size": 25},
+            },
+            paper_bgcolor="#262730",   
+            plot_bgcolor="#262730",    
+            font_color="white",
+            legend=dict(
+                orientation="h",       
+                yanchor="top",
+                y=-0.1,               
+                xanchor="center",
+                x=0.5
+            ),
+            margin=dict(t=100, b=80)    
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
     def render_recent_comments(self):
         comments = self.get_hybrid_comments(limit=100)
 
         if not comments:
             st.info("No recent comments available")
             return
-        
-        df = pd.DataFrame(comments)
 
+        df = pd.DataFrame(comments)
+        
         df["timestamp"] = pd.to_datetime(df["timestamp"]).dt.strftime("%H:%M:%S")
         df["confidence"] = df["confidence"].round(3)
         df["sentiment"] = df["sentiment"].str.title()
@@ -614,10 +641,11 @@ class Dashboard:
                 return "background-color: #4D96FF"
 
         styled_df = df[
-            ["timestamp", "username", "comment", "sentiment", "confidence"]        ].style.map(color_sentiment, subset=["sentiment"])
+            ["timestamp", "username", "comment", "sentiment", "confidence"]
+        ].style.map(color_sentiment, subset=["sentiment"])
 
-        st.dataframe(styled_df, use_container_width=True)    
-    
+        st.dataframe(styled_df, height=455, use_container_width=True)
+
     def render_sentiment_timeline(self):
         comments = self.get_hybrid_comments(limit=1000)
         if not comments:
@@ -625,175 +653,210 @@ class Dashboard:
             return
 
         df = pd.DataFrame(comments)
-        df['timestamp'] = pd.to_datetime(df['timestamp'])
-        df = df.sort_values('timestamp')
-        
-        df['time_group'] = df['timestamp'].dt.floor('180s')
-        
-        sentiment_timeline = df.groupby(['time_group', 'sentiment']).size().unstack(fill_value=0)
-        
+        df["timestamp"] = pd.to_datetime(df["timestamp"])
+        df = df.sort_values("timestamp")
+
+        df["time_group"] = df["timestamp"].dt.floor("180s")
+
+        sentiment_timeline = (
+            df.groupby(["time_group", "sentiment"]).size().unstack(fill_value=0)
+        )
+
         if sentiment_timeline.empty:
             st.info("No sentiment data available for timeline")
             return
-        
+
         sentiment_timeline = sentiment_timeline.reset_index()
-        
+
         fig = go.Figure()
-        colors = {'positive': '#6BCB77', 'negative': '#FF6B6B', 'neutral': '#4D96FF'}
-        fill_colors = {'positive': 'rgba(107,203,119,0.2)', 'negative': 'rgba(255,107,107,0.2)', 'neutral': 'rgba(77,150,255,0.2)'}
-        
-        for sentiment in ['positive', 'negative', 'neutral']:
+        colors = {"positive": "#6BCB77", "negative": "#FF6B6B", "neutral": "#4D96FF"}
+        fill_colors = {
+            "positive": "rgba(107,203,119,0.2)",
+            "negative": "rgba(255,107,107,0.2)",
+            "neutral": "rgba(77,150,255,0.2)",
+        }
+
+        for sentiment in ["positive", "negative", "neutral"]:
             if sentiment in sentiment_timeline.columns:
-                fig.add_trace(go.Scatter(
-                    x=sentiment_timeline['time_group'],
-                    y=sentiment_timeline[sentiment],
-                    mode='lines+markers',
-                    name=sentiment.title(),
-                    line=dict(color=colors[sentiment], width=3, shape='spline'),
-                    marker=dict(size=8, symbol='circle'),
-                    fill='tonexty' if sentiment == 'negative' else None,
-                    fillcolor=fill_colors[sentiment]
-                ))
-        
+                fig.add_trace(
+                    go.Scatter(
+                        x=sentiment_timeline["time_group"],
+                        y=sentiment_timeline[sentiment],
+                        mode="lines+markers",
+                        name=sentiment.title(),
+                        line=dict(color=colors[sentiment], width=3, shape="spline"),
+                        marker=dict(size=8, symbol="circle"),
+                        fill="tonexty" if sentiment == "negative" else None,
+                        fillcolor=fill_colors[sentiment],
+                    )
+                )
+
         fig.update_layout(
             title={
-                'text': "📈 Sentiment Timeline",
-                'x': 0.5,
-                'xanchor': 'center',
-                'font': {'size': 20}
+                "text": "📈 Sentiment Timeline",
+                "x": 0.5,
+                "xanchor": "center",
+                "font": {"size": 25},
             },
             xaxis_title="Time",
             yaxis_title="Number of Comments",
-            hovermode='x unified',
+            hovermode="x unified",
             showlegend=True,
             height=450,
             margin=dict(l=50, r=50, t=80, b=50),
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor="#262730",
+            paper_bgcolor="#262730",
             xaxis=dict(
                 showgrid=True,
                 gridwidth=1,
-                gridcolor='rgba(128,128,128,0.2)',
-                tickformat='%H:%M:%S'
+                gridcolor="rgba(128,128,128,0.2)",
+                tickformat="%H:%M:%S",
             ),
-            yaxis=dict(
-                showgrid=True,
-                gridwidth=1,
-                gridcolor='rgba(128,128,128,0.2)'
-            ),
+            yaxis=dict(showgrid=True, gridwidth=1, gridcolor="rgba(128,128,128,0.2)"),
             legend=dict(
-                orientation="h",
-                yanchor="bottom",
-                y=1.02,
-                xanchor="right",
-                x=1
-            )
+                orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1
+            ),
         )
-        
-        st.plotly_chart(fig, use_container_width=True)       
-    
+
+        st.plotly_chart(fig, use_container_width=True)
+
     def render_top_active_users(self):
         comments = self.get_hybrid_comments(limit=1000)
-        
+
         if not comments:
             st.info("No data available for top active users")
             return
-        
+
         self.render_data_source_info(comments, "Top Active Users")
         df = pd.DataFrame(comments)
-        user_counts = df['username'].value_counts().head(10)
-        
+        user_counts = df["username"].value_counts().head(10)
+
         if user_counts.empty:
             st.info("No user data available")
             return
-        
+
         fig = px.bar(
             x=user_counts.values,
             y=user_counts.index,
-            orientation='h',
-            labels={'x': 'Number of Comments', 'y': 'Username'},
+            orientation="h",
+            labels={"x": "Number of Comments", "y": "Username"},
             color=user_counts.values,
-            color_continuous_scale='plasma'
+            color_continuous_scale="plasma",
         )
-        
+
         fig.update_layout(
-            yaxis={'categoryorder': 'total ascending'},
             height=400,
             showlegend=False,
-            plot_bgcolor='#262730',     
-            paper_bgcolor='#262730',    
-            font_color='white',
-            margin=dict(t=10, b=10)
+            plot_bgcolor="#262730",
+            paper_bgcolor="#262730",
+            font_color="white",
+            xaxis=dict(
+                showgrid=True,
+                gridwidth=1,
+                gridcolor="rgba(128,128,128,0.2)",
+            ),
+            yaxis=dict(
+                categoryorder="total ascending",
+            ),
+            margin=dict(t=10, b=10),
         )
-        
-        
-        st.plotly_chart(fig, use_container_width=True)     
+
+        st.markdown(
+            """
+            <style>
+            .stPlotlyChart:last-of-type {
+                border-radius: 0.5rem;
+                outline: 4px solid #262730;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+                overflow: hidden;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
     def render_trending_words_cloud(self):
         comments = self.get_hybrid_comments(limit=1000)
-        
+
         if not comments:
             st.info("No data available for word cloud")
             return
-        
+
         self.render_data_source_info(comments, "Trending Words")
-        all_text = ' '.join([comment['comment'] for comment in comments if comment.get('comment')])
-        
+        all_text = " ".join(
+            [comment["comment"] for comment in comments if comment.get("comment")]
+        )
+
         if not all_text.strip():
             st.info("No text data available for word cloud")
             return
-        
-        cleaned_text = re.sub(r'[^\w\s]', ' ', all_text.lower())
-        cleaned_text = re.sub(r'\s+', ' ', cleaned_text)
-        
+
+        cleaned_text = re.sub(r"[^\w\s]", " ", all_text.lower())
+        cleaned_text = re.sub(r"\s+", " ", cleaned_text)
+
         stop_words = {'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 
                         'is', 'are', 'was', 'were', 'be', 'been', 'have', 'has', 'had', 'do', 'does', 
                         'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must', 'can', 
                         'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they',
                         'a', 'an', 'my', 'your', 'his', 'her', 'its', 'our', 'their', 'me', 'him', 'her', 'us', 'them'}
+
+        st.markdown(
+            """
+            <style>
+            .custom-wordcloud-box {
+                border-radius: 0.5rem;
+                outline: 4px solid #262730;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+                width: fit-content;
+                margin: auto;
+                overflow: hidden;
+                height: 400px;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
         
-        try:
-            wordcloud = WordCloud(
-                width=800, 
-                height=621, 
-                background_color='#262730',
-                max_words=100,
-                colormap='plasma',
-                stopwords=stop_words
-            ).generate(cleaned_text)
-            
-            fig, ax = plt.subplots(figsize=(10, 5))
-            ax.imshow(wordcloud, interpolation='bilinear')
-            ax.axis('off')
-            fig.patch.set_facecolor('#262730')  
-            ax.set_facecolor('#262730')
-            st.pyplot(fig)
-            plt.close()
-            
-        except Exception as e:
-            st.error(f"Error generating word cloud: {e}")
-            words = cleaned_text.split()
-            word_freq = Counter([word for word in words if len(word) > 3 and word not in stop_words])
-            top_words = dict(word_freq.most_common(15))
-            
-            if top_words:
-                fig = px.bar(
-                    x=list(top_words.values()),
-                    y=list(top_words.keys()),
-                    orientation='h',
-                    title="🔥 Most Frequent Words",
-                    labels={'x': 'Frequency', 'y': 'Words'}
-                )
-                fig.update_layout(yaxis={'categoryorder': 'total ascending'}, height=400)
-                st.plotly_chart(fig, use_container_width=True)    
+        wordcloud = WordCloud(
+            width=800,
+            height=600,
+            background_color="#262730",
+            max_words=100,
+            colormap="plasma",
+            stopwords=stop_words,
+        ).generate(cleaned_text)
+
+        fig, ax = plt.subplots(figsize=(10, 5))
+        ax.imshow(wordcloud, interpolation="bilinear")
+        ax.axis("off")
+        fig.patch.set_facecolor("#262730")
+        ax.set_facecolor("#262730")
+        buf = BytesIO()
+        fig.savefig(
+            buf, format="png", bbox_inches="tight", facecolor=fig.get_facecolor()
+        )
+        buf.seek(0)
+        img_base64 = base64.b64encode(buf.read()).decode()
+
+        st.markdown(
+            f"""
+            <div class="custom-wordcloud-box">
+                <img src="data:image/png;base64,{img_base64}" style="display: block;">
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
     def render_advanced_visualizations(self):
         self.render_sentiment_timeline()
-        
+
         col1, col2 = st.columns(2)
-        
+
         with col1:
             st.subheader("🏆 Top Active Users")
             self.render_top_active_users()
-            
+
         with col2:
             st.subheader("🔥 Trending Words")
             self.render_trending_words_cloud()
@@ -808,24 +871,27 @@ class Dashboard:
             )
             if video_info["published_at"]:
                 published_date = datetime.fromisoformat(
-                    video_info["published_at"].replace("Z", "+00:00")                ).strftime("%d %B %Y")
+                    video_info["published_at"].replace("Z", "+00:00")
+                ).strftime("%d %B %Y")
                 st.markdown(f"**Published:** {published_date}")
-                
+
     def render_sidebar_system_monitoring(self):
         """Render system monitoring in sidebar"""
         st.sidebar.header("🖥️ System Monitoring")
         status = self.check_connection_status()
-        
+
         with st.sidebar.expander("🗨️ Process Status", expanded=False):
             for process_name, process_info in status["processes"].items():
-                st.write(f"{process_info['status']} **{process_name.replace('_', ' ').title()}**")
-                st.caption(process_info['details'])
-        
+                st.write(
+                    f"{process_info['status']} **{process_name.replace('_', ' ').title()}**"
+                )
+                st.caption(process_info["details"])
+
         with st.sidebar.expander("🔗 Connection Status", expanded=False):
             for conn_name, conn_info in status["connections"].items():
                 st.write(f"{conn_info['status']} **{conn_name.upper()}**")
-                st.caption(conn_info['details'])
-        
+                st.caption(conn_info["details"])
+
         with st.sidebar.expander("📤 Export Options", expanded=False):
             if st.button("📄 Export CSV", key="export_csv"):
                 csv_data = self.export_data_to_csv()
@@ -835,9 +901,9 @@ class Dashboard:
                         data=csv_data,
                         file_name=f"comments_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                         mime="text/csv",
-                        key="download_csv"
+                        key="download_csv",
                     )
-            
+
             if st.button("📋 Export JSON", key="export_json"):
                 json_data = self.export_data_to_json()
                 if json_data:
@@ -846,17 +912,17 @@ class Dashboard:
                         data=json_data,
                         file_name=f"comments_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
                         mime="application/json",
-                        key="download_json"
+                        key="download_json",
                     )
-        
+
         with st.sidebar.expander("⚡ Quick Actions", expanded=False):
             if st.button("🔄 Refresh Data", key="refresh_data"):
                 st.cache_data.clear()
                 st.rerun()
-            
+
             if st.button("🧹 Clear Cache", key="clear_cache"):
                 try:
-                    
+
                     self.redis_client.flushdb()
                     st.success("✅ Cache cleared successfully!")
                 except Exception as e:
@@ -877,7 +943,9 @@ class Dashboard:
             st.metric("Time Window", f"{config.SUMMARY_WINDOW_MINUTES} minutes")
             st.metric("Total Comments", summary["total_comments"])
         with col2:
-            window_start = safe_parse_timestamp(summary["window_start"]).strftime("%H:%M")
+            window_start = safe_parse_timestamp(summary["window_start"]).strftime(
+                "%H:%M"
+            )
             window_end = safe_parse_timestamp(summary["window_end"]).strftime("%H:%M")
             st.metric("Window", f"{window_start} - {window_end}")
 
@@ -889,8 +957,9 @@ class Dashboard:
             disabled=True,
             key=unique_key,
         )
-        
-        st.markdown("""
+
+        st.markdown(
+            """
         <style>
         textarea[disabled]{
             color: white !important;
@@ -899,52 +968,59 @@ class Dashboard:
             cursor: text !important;
         }
         </style>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
         if "sentiment_distribution" in summary:
             st.subheader("Sentiment in This Window")
             sentiment_data = []
-            
-            
+
             total_count = 0
             sentiment_dist = summary["sentiment_distribution"]
-            
-            
+
             for sentiment, stats in sentiment_dist.items():
                 if isinstance(stats, dict) and "count" in stats:
                     total_count += stats["count"]
                 elif isinstance(stats, (int, float)):
                     total_count += stats
-            
-            
+
             for sentiment, stats in sentiment_dist.items():
                 try:
                     if isinstance(stats, dict):
                         count = stats.get("count", 0)
-                        
+
                         if "percentage" in stats:
                             percentage = stats["percentage"]
                         else:
-                            percentage = (count / total_count * 100) if total_count > 0 else 0
+                            percentage = (
+                                (count / total_count * 100) if total_count > 0 else 0
+                            )
                     else:
-                        
+
                         count = stats if isinstance(stats, (int, float)) else 0
-                        percentage = (count / total_count * 100) if total_count > 0 else 0
-                    
-                    sentiment_data.append({
-                        "Sentiment": sentiment.title(),
-                        "Count": count,
-                        "Percentage": f"{percentage:.1f}%"
-                    })
+                        percentage = (
+                            (count / total_count * 100) if total_count > 0 else 0
+                        )
+
+                    sentiment_data.append(
+                        {
+                            "Sentiment": sentiment.title(),
+                            "Count": count,
+                            "Percentage": f"{percentage:.1f}%",
+                        }
+                    )
                 except Exception as e:
                     st.warning(f"Error processing sentiment data for {sentiment}: {e}")
-                    
-                    sentiment_data.append({
-                        "Sentiment": sentiment.title(),
-                        "Count": 0,
-                        "Percentage": "0.0%"
-                    })
-            
+
+                    sentiment_data.append(
+                        {
+                            "Sentiment": sentiment.title(),
+                            "Count": 0,
+                            "Percentage": "0.0%",
+                        }
+                    )
+
             if sentiment_data:
                 df_sentiment = pd.DataFrame(sentiment_data)
                 st.dataframe(df_sentiment, use_container_width=True)
@@ -960,46 +1036,49 @@ class Dashboard:
             return
 
         st.subheader("📚 Summary History")
-        st.caption(f"Showing all summaries from oldest to newest ({len(summaries)} total)")
+        st.caption(
+            f"Showing all summaries from oldest to newest ({len(summaries)} total)"
+        )
 
         summaries.reverse()
 
         for i, summary in enumerate(summaries):
             with st.expander(
                 f"📋 Summary #{len(summaries) - i} - {safe_parse_timestamp(summary['window_start']).strftime('%H:%M')} to {safe_parse_timestamp(summary['window_end']).strftime('%H:%M')}",
-                expanded=(i == 0)
+                expanded=(i == 0),
             ):
                 col1, col2 = st.columns(2)
                 with col1:
                     st.metric("Comments", summary["total_comments"])
                 with col2:
                     st.metric("Window", f"{config.SUMMARY_WINDOW_MINUTES} min")
-                
+
                 st.text_area(
                     "Summary Content",
                     summary["summary"],
                     height=200,
                     disabled=True,
-                    key=f"summary_history_{i}_{uuid.uuid4()}"
+                    key=f"summary_history_{i}_{uuid.uuid4()}",
                 )
 
     def render_data_source_info(self, comments, chart_title="Analytics"):
         """Display information about the data source being used"""
         if not comments:
             return
-            
-        
+
         sources = {}
         for comment in comments:
-            source = comment.get('_data_source', 'unknown')
+            source = comment.get("_data_source", "unknown")
             sources[source] = sources.get(source, 0) + 1
-        
+
         if sources:
             source_info = []
             for source, count in sources.items():
-                icon = {"redis": "⚡", "mongodb": "🗄️", "unknown": "❓"}.get(source, "❓")
+                icon = {"redis": "⚡", "mongodb": "🗄️", "unknown": "❓"}.get(
+                    source, "❓"
+                )
                 source_info.append(f"{icon} {source.title()}: {count}")
-            
+
             info_text = f"**{chart_title} Data Source:** " + " | ".join(source_info)
             st.caption(info_text)
 
@@ -1008,7 +1087,7 @@ def main():
     svg_icon = """
     <svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" fill="red" style="vertical-align:middle;" class="bi bi-youtube" viewBox="0 0 16 16">
     <path d="M8.051 1.999h.089c.822.003 4.987.033 6.11.335a2.01 2.01 0 0 1 1.415 1.42c.101.38.172.883.22 1.402l.01.104.022.26.008.104c.065.914.073 1.77.074 1.957v.075c-.001.194-.01 1.108-.082 2.06l-.008.105-.009.104c-.05.572-.124 1.14-.235 1.558a2.01 2.01 0 0 1-1.415 1.42c-1.16.312-5.569.334-6.18.335h-.142c-.309 0-1.587-.006-2.927-.052l-.17-.006-.087-.004-.171-.007-.171-.007c-1.11-.049-2.167-.128-2.654-.26a2.01 2.01 0 0 1-1.415-1.419c-.111-.417-.185-.986-.235-1.558L.09 9.82l-.008-.104A31 31 0 0 1 0 7.68v-.123c.002-.215.01-.958.064-1.778l.007-.103.003-.052.008-.104.022-.26.01-.104c.048-.519.119-1.023.22-1.402a2.01 2.01 0 0 1 1.415-1.42c.487-.13 1.544-.21 2.654-.26l.17-.007.172-.006.086-.003.171-.007A100 100 0 0 1 7.858 2zM6.4 5.209v4.818l4.157-2.408z"/>    </svg>
-    """    
+    """
     st.markdown(
         f"""
     <h1>{svg_icon} YouTube Live Stream Analytics</h1>
@@ -1019,7 +1098,7 @@ def main():
 
     dashboard.render_video_info()
     st.divider()
-    
+
     css = """
     <style>
         div[data-baseweb="slider"] {
@@ -1031,36 +1110,39 @@ def main():
         section[data-testid="stSidebar"] h1 {
             margin-top: 0px !important;
         }
+        .dvn-scroller.glideDataEditor {
+            scrollbar-width: inherit;
+        }
     </style>
     """
     st.markdown(css, unsafe_allow_html=True)
-    st.sidebar.header("⚙️ System Setting")    
-    
+    st.sidebar.header("⚙️ System Setting")
+
     with st.sidebar.expander("⚙️ Settings", expanded=True):
         auto_refresh = st.checkbox("Auto Refresh", value=True)
         refresh_interval = st.slider("Refresh Interval (seconds)", 3, 10, 3)
-        
 
     sidebar_status = st.sidebar.empty()
     st.sidebar.markdown(
         """<hr style="margin-top:15px; margin-bottom: 0; !important">""",
-        unsafe_allow_html=True    )
+        unsafe_allow_html=True,
+    )
     dashboard.render_sidebar_system_monitoring()
     st.sidebar.markdown(
         """<hr style="margin-top:15px; margin-bottom: 0; !important">""",
-        unsafe_allow_html=True
+        unsafe_allow_html=True,
     )
-    
+
     if auto_refresh:
         realtime_placeholder = st.empty()
         st.header("📋 Comment Summaries")
         tab1, tab2 = st.tabs(["Latest Summary", "Summary History"])
-        
+
         with tab1:
             summary_placeholder = st.empty()
             with summary_placeholder.container():
                 dashboard.render_latest_summary()
-        
+
         with tab2:
             history_placeholder = st.empty()
             with history_placeholder.container():
@@ -1072,7 +1154,7 @@ def main():
 
         while True:
             current_time = time.time()
-            
+
             with realtime_placeholder.container():
                 st.header("📊 Real-time Metrics")
                 dashboard.render_metrics()
@@ -1080,12 +1162,10 @@ def main():
                 with col1:
                     dashboard.render_sentiment_chart()
                 with col2:
-                    st.subheader("💬 Recent Comments")
                     dashboard.render_recent_comments()
-                
-                
+
                 dashboard.render_advanced_visualizations()
-                
+
                 current_timestamp = datetime.now().strftime("%H:%M:%S")
                 time_until_refresh = int(
                     summary_refresh_interval - (current_time - last_summary_refresh)
@@ -1114,8 +1194,9 @@ def main():
                         </div>
                     </div>
                     """,
-                    unsafe_allow_html=True,                )
-            
+                    unsafe_allow_html=True,
+                )
+
             if current_time - last_summary_refresh >= summary_refresh_interval:
                 with summary_placeholder.container():
                     dashboard.render_latest_summary()
@@ -1124,20 +1205,19 @@ def main():
                 last_summary_refresh = current_time
 
             time.sleep(refresh_interval)
-    else:        
+    else:
         st.header("📊 Real-time Metrics")
         dashboard.render_metrics()
         col1, col2 = st.columns([1, 2])
 
         with col1:
             dashboard.render_sentiment_chart()
-            
+
         with col2:
-            st.subheader("💬 Recent Comments")
             dashboard.render_recent_comments()
-        
+
         dashboard.render_advanced_visualizations()
-        
+
         st.header("📋 Comment Summaries")
         tab1, tab2 = st.tabs(["Latest Summary", "Summary History"])
         with tab1:
