@@ -72,7 +72,7 @@ st.set_page_config(
 
 
 class Dashboard:
-    def __init__(self):
+    def __init__(self, data_limit=1000):
         self.redis_client = redis.Redis(
             host=config.REDIS_HOST,
             port=config.REDIS_PORT,
@@ -80,6 +80,7 @@ class Dashboard:
             decode_responses=True,
         )
         self.video_info = None
+        self.data_limit = data_limit
 
         self.mongo_client = None
         self.mongo_db = None
@@ -256,15 +257,14 @@ class Dashboard:
         process_status = self.check_process_status()
 
         combined_status = {
-            "connections": connection_status,
-            "processes": process_status,
+            "connections": connection_status,        "processes": process_status,
         }
 
         return combined_status
 
     def export_data_to_csv(self):
         try:
-            comments = self.get_hybrid_comments(limit=1000)
+            comments = self.get_hybrid_comments(limit=self.data_limit)
             if not comments:
                 return None
 
@@ -272,8 +272,7 @@ class Dashboard:
 
             csv_buffer = io.StringIO()
             df.to_csv(csv_buffer, index=False)
-            csv_data = csv_buffer.getvalue()
-
+            csv_data = csv_buffer.getvalue()            
             return csv_data
         except Exception as e:
             st.error(f"Error exporting to CSV: {e}")
@@ -281,7 +280,7 @@ class Dashboard:
 
     def export_data_to_json(self):
         try:
-            comments = self.get_hybrid_comments(limit=1000)
+            comments = self.get_hybrid_comments(limit=self.data_limit)
             if not comments:
                 return None
 
@@ -599,23 +598,17 @@ class Dashboard:
         )
         
         fig.update_layout(
-            title={
-                "text": "🤖 Sentiment Distribution",
-                "x": 0.5,
-                "xanchor": "center",
-                "font": {"size": 25},
-            },
             paper_bgcolor="#262730",   
             plot_bgcolor="#262730",    
             font_color="white",
             legend=dict(
                 orientation="h",       
                 yanchor="top",
-                y=-0.1,               
+                y=0,               
                 xanchor="center",
                 x=0.5
             ),
-            margin=dict(t=100, b=80)    
+            margin=dict(t=10, b=10, r=40, l=40),    
         )
         st.plotly_chart(fig, use_container_width=True)
 
@@ -647,7 +640,7 @@ class Dashboard:
         st.dataframe(styled_df, height=455, use_container_width=True)
 
     def render_sentiment_timeline(self):
-        comments = self.get_hybrid_comments(limit=1000)
+        comments = self.get_hybrid_comments(limit=self.data_limit)
         if not comments:
             st.info("No data available for sentiment timeline")
             return
@@ -692,18 +685,12 @@ class Dashboard:
                 )
 
         fig.update_layout(
-            title={
-                "text": "📈 Sentiment Timeline",
-                "x": 0.5,
-                "xanchor": "center",
-                "font": {"size": 25},
-            },
             xaxis_title="Time",
             yaxis_title="Number of Comments",
             hovermode="x unified",
             showlegend=True,
             height=450,
-            margin=dict(l=50, r=50, t=80, b=50),
+            margin=dict(l=50, r=50, t=10, b=50),
             plot_bgcolor="#262730",
             paper_bgcolor="#262730",
             xaxis=dict(
@@ -721,13 +708,13 @@ class Dashboard:
         st.plotly_chart(fig, use_container_width=True)
 
     def render_top_active_users(self):
-        comments = self.get_hybrid_comments(limit=1000)
+        comments = self.get_hybrid_comments(limit=self.data_limit)
 
         if not comments:
             st.info("No data available for top active users")
             return
 
-        self.render_data_source_info(comments, "Top Active Users")
+        # self.render_data_source_info(comments, "Top Active Users")
         df = pd.DataFrame(comments)
         user_counts = df["username"].value_counts().head(10)
 
@@ -777,13 +764,12 @@ class Dashboard:
         st.plotly_chart(fig, use_container_width=True)
 
     def render_trending_words_cloud(self):
-        comments = self.get_hybrid_comments(limit=1000)
+        comments = self.get_hybrid_comments(limit=self.data_limit)
 
         if not comments:
             st.info("No data available for word cloud")
             return
 
-        self.render_data_source_info(comments, "Trending Words")
         all_text = " ".join(
             [comment["comment"] for comment in comments if comment.get("comment")]
         )
@@ -807,11 +793,20 @@ class Dashboard:
             .custom-wordcloud-box {
                 border-radius: 0.5rem;
                 outline: 4px solid #262730;
+                background-color: #262730;
                 box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-                width: fit-content;
                 margin: auto;
                 overflow: hidden;
                 height: 400px;
+                display: flex;
+                justify-content: center; /* Horizontal center */
+                align-items: center;     /* Vertical center */
+            }
+
+            .custom-wordcloud-box img {
+                max-width: 100%;
+                max-height: 100%;
+                object-fit: contain;
             }
             </style>
             """,
@@ -819,7 +814,7 @@ class Dashboard:
         )
         
         wordcloud = WordCloud(
-            width=800,
+            width=790,
             height=600,
             background_color="#262730",
             max_words=100,
@@ -849,6 +844,7 @@ class Dashboard:
         )
 
     def render_advanced_visualizations(self):
+        st.subheader("📈 Sentiment Timeline")
         self.render_sentiment_timeline()
 
         col1, col2 = st.columns(2)
@@ -1062,7 +1058,6 @@ class Dashboard:
                 )
 
     def render_data_source_info(self, comments, chart_title="Analytics"):
-        """Display information about the data source being used"""
         if not comments:
             return
 
@@ -1085,24 +1080,21 @@ class Dashboard:
 
 def main():
     svg_icon = """
-    <svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" fill="red" style="vertical-align:middle;" class="bi bi-youtube" viewBox="0 0 16 16">
-    <path d="M8.051 1.999h.089c.822.003 4.987.033 6.11.335a2.01 2.01 0 0 1 1.415 1.42c.101.38.172.883.22 1.402l.01.104.022.26.008.104c.065.914.073 1.77.074 1.957v.075c-.001.194-.01 1.108-.082 2.06l-.008.105-.009.104c-.05.572-.124 1.14-.235 1.558a2.01 2.01 0 0 1-1.415 1.42c-1.16.312-5.569.334-6.18.335h-.142c-.309 0-1.587-.006-2.927-.052l-.17-.006-.087-.004-.171-.007-.171-.007c-1.11-.049-2.167-.128-2.654-.26a2.01 2.01 0 0 1-1.415-1.419c-.111-.417-.185-.986-.235-1.558L.09 9.82l-.008-.104A31 31 0 0 1 0 7.68v-.123c.002-.215.01-.958.064-1.778l.007-.103.003-.052.008-.104.022-.26.01-.104c.048-.519.119-1.023.22-1.402a2.01 2.01 0 0 1 1.415-1.42c.487-.13 1.544-.21 2.654-.26l.17-.007.172-.006.086-.003.171-.007A100 100 0 0 1 7.858 2zM6.4 5.209v4.818l4.157-2.408z"/>    </svg>
+    <svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" fill="red" style="vertical-align:middle;" class="bi bi-youtube" viewBox="0 0 16 16">    <path d="M8.051 1.999h.089c.822.003 4.987.033 6.11.335a2.01 2.01 0 0 1 1.415 1.42c.101.38.172.883.22 1.402l.01.104.022.26.008.104c.065.914.073 1.77.074 1.957v.075c-.001.194-.01 1.108-.082 2.06l-.008.105-.009.104c-.05.572-.124 1.14-.235 1.558a2.01 2.01 0 0 1-1.415 1.42c-1.16.312-5.569.334-6.18.335h-.142c-.309 0-1.587-.006-2.927-.052l-.17-.006-.087-.004-.171-.007-.171-.007c-1.11-.049-2.167-.128-2.654-.26a2.01 2.01 0 0 1-1.415-1.419c-.111-.417-.185-.986-.235-1.558L.09 9.82l-.008-.104A31 31 0 0 1 0 7.68v-.123c.002-.215.01-.958.064-1.778l.007-.103.003-.052.008-.104.022-.26.01-.104c.048-.519.119-1.023.22-1.402a2.01 2.01 0 0 1 1.415-1.42c.487-.13 1.544-.21 2.654-.26l.17-.007.172-.006.086-.003.171-.007A100 100 0 0 1 7.858 2zM6.4 5.209v4.818l4.157-2.408z"/>    </svg>
     """
+    
     st.markdown(
         f"""
     <h1>{svg_icon} YouTube Live Stream Analytics</h1>
     """,
         unsafe_allow_html=True,
     )
-    dashboard = Dashboard()
-
-    dashboard.render_video_info()
-    st.divider()
 
     css = """
     <style>
         div[data-baseweb="slider"] {
             margin-left:5px !important;
+            margin-right:5px !important;
         }
         div[data-testid="stSidebarUserContent"] {
             padding-top: 40px !important;
@@ -1112,15 +1104,26 @@ def main():
         }
         .dvn-scroller.glideDataEditor {
             scrollbar-width: inherit;
-        }
+        }    
     </style>
     """
     st.markdown(css, unsafe_allow_html=True)
-    st.sidebar.header("⚙️ System Setting")
+    st.sidebar.header("📊 System Preferences")
 
     with st.sidebar.expander("⚙️ Settings", expanded=True):
         auto_refresh = st.checkbox("Auto Refresh", value=True)
         refresh_interval = st.slider("Refresh Interval (seconds)", 3, 10, 3)
+        # data_limit = st.slider("Data Limit for Analytics", 1000, 5000, 1000, step=1000)
+        data_limit = st.selectbox(
+            "📊 Data Limit for Analytics",        
+            options=[1000, 2000, 300, 4000, 5000],
+            index=0,  # default to 1000
+        )
+
+    # Initialize dashboard with the selected data limit
+    dashboard = Dashboard(data_limit=data_limit)
+    dashboard.render_video_info()
+    st.divider()
 
     sidebar_status = st.sidebar.empty()
     st.sidebar.markdown(
@@ -1160,8 +1163,10 @@ def main():
                 dashboard.render_metrics()
                 col1, col2 = st.columns([1, 2])
                 with col1:
+                    st.subheader("🤖 Sentiment Distribution")
                     dashboard.render_sentiment_chart()
                 with col2:
+                    st.subheader("💬 Recent Comments")
                     dashboard.render_recent_comments()
 
                 dashboard.render_advanced_visualizations()
