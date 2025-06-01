@@ -71,7 +71,7 @@ st.set_page_config(
 )
 
 
-class Dashboard:
+class Dashboard:    
     def __init__(self, data_limit=1000):
         self.redis_client = redis.Redis(
             host=config.REDIS_HOST,
@@ -85,8 +85,22 @@ class Dashboard:
         self.mongo_client = None
         self.mongo_db = None
         self.init_mongodb()
+        
+        self.load_data_from_mongodb_to_redis_if_needed()
 
-        self.load_data_from_mongodb_to_redis()
+    def load_data_from_mongodb_to_redis_if_needed(self):
+        try:
+            timeline_key = f"{config.SENTIMENT_CACHE_KEY}:timeline"
+            existing_count = self.redis_client.zcard(timeline_key)
+            
+            if existing_count > 0:
+                return
+            
+            self.load_data_from_mongodb_to_redis()
+            
+        except Exception as e:
+            st.error(f"🔴 Error checking Redis data: {e}")
+            self.load_data_from_mongodb_to_redis()
 
     def load_data_from_mongodb_to_redis(self):
         try:
@@ -115,7 +129,7 @@ class Dashboard:
                         comment_key = (
                             f"{config.SENTIMENT_CACHE_KEY}:{comment_data['comment_id']}"
                         )
-                        self.redis_client.setex(comment_key, config.CACHE_EXPIRY_SECONDS, json.dumps(comment_data))
+                        self.redis_client.set(comment_key, json.dumps(comment_data))
 
                         timestamp = safe_parse_timestamp(
                             comment_data["timestamp"]
@@ -146,7 +160,6 @@ class Dashboard:
             st.error(f"🔴 Error loading data from MongoDB to Redis: {e}")
 
     def check_process_status(self):
-        """Check if system processes are running"""
         processes = {
             "youtube_api": {"status": "🔴", "details": "Not running"},
             "comment_cleaner": {"status": "🔴", "details": "Not running"},
@@ -205,7 +218,6 @@ class Dashboard:
         return processes
 
     def check_connection_status(self):
-
         connection_status = {
             "redis": {"status": "🔴", "details": "Not connected"},
             "mongodb": {"status": "🔴", "details": "Not connected"},
@@ -257,14 +269,15 @@ class Dashboard:
         process_status = self.check_process_status()
 
         combined_status = {
-            "connections": connection_status,        "processes": process_status,
+            "connections": connection_status,
+            "processes": process_status,
         }
 
         return combined_status
 
     def export_data_to_csv(self):
         try:
-            comments = self.get_hybrid_comments(limit=self.data_limit)
+            comments = self.get_recent_comments()  
             if not comments:
                 return None
 
@@ -276,11 +289,10 @@ class Dashboard:
             return csv_data
         except Exception as e:
             st.error(f"Error exporting to CSV: {e}")
-            return None
-
+            return None    
     def export_data_to_json(self):
         try:
-            comments = self.get_hybrid_comments(limit=self.data_limit)
+            comments = self.get_recent_comments()  
             if not comments:
                 return None
 
@@ -368,17 +380,22 @@ class Dashboard:
                 self.redis_client.get(f"{config.SENTIMENT_CACHE_KEY}:counts:neutral")
                 or 0
             )
-
+            
             return {"positive": positive, "negative": negative, "neutral": neutral}
         except Exception as e:
             st.error(f"Error getting sentiment counts: {e}")
             return {"positive": 0, "negative": 0, "neutral": 0}
 
-    def get_recent_comments(self, limit=100):
+    def get_recent_comments(self, limit=None):
         try:
-            comment_ids = self.redis_client.zrevrange(
-                f"{config.SENTIMENT_CACHE_KEY}:timeline", 0, limit - 1
-            )
+            if limit is None:
+                comment_ids = self.redis_client.zrevrange(
+                    f"{config.SENTIMENT_CACHE_KEY}:timeline", 0, -1
+                )
+            else:
+                comment_ids = self.redis_client.zrevrange(
+                    f"{config.SENTIMENT_CACHE_KEY}:timeline", 0, limit - 1
+                )
 
             comments = []
             for comment_id in comment_ids:
@@ -390,62 +407,8 @@ class Dashboard:
 
             return comments
         except Exception as e:
-            st.error(f"Error getting recent comments: {e}")
+            st.error(f"Error getting recent comments from Redis: {e}")
             return []
-
-    def get_comments_from_mongodb(self, limit=None, hours_back=None):
-        """Get comments directly from MongoDB for permanent data access"""
-        if self.mongo_db is None:
-            st.error("MongoDB connection not available")
-            return []
-
-        try:
-            comments_collection_name = f"{config.VIDEO_ID}_comments"
-            comments_collection = self.mongo_db[comments_collection_name]
-
-            query = {}
-            if hours_back:
-                cutoff_time = datetime.now() - timedelta(hours=hours_back)
-                query["timestamp"] = {"$gte": cutoff_time}
-
-            cursor = comments_collection.find(query).sort("timestamp", -1)
-
-            if limit:
-                cursor = cursor.limit(limit)
-
-            comments = []
-            for doc in cursor:
-
-                comment = {
-                    "comment_id": str(doc.get("id", "")),
-                    "username": doc.get("username", "Unknown"),
-                    "comment": doc.get("comment", ""),
-                    "timestamp": (
-                        doc.get("timestamp", datetime.now()).isoformat()
-                        if hasattr(doc.get("timestamp"), "isoformat")
-                        else str(doc.get("timestamp", ""))
-                    ),
-                    "sentiment": doc.get("sentiment", "neutral"),
-                    "confidence": doc.get("confidence", 0.0),
-                }
-                comments.append(comment)
-            return comments
-
-        except Exception as e:
-            st.error(f"Error getting comments from MongoDB: {e}")
-            return []
-
-    def get_hybrid_comments(self, limit=100):
-        redis_comments = self.get_recent_comments(limit)
-        if len(redis_comments) >= min(limit, 500):
-            for comment in redis_comments:
-                comment["_data_source"] = "redis"
-            return redis_comments
-        else:
-            mongodb_comments = self.get_comments_from_mongodb(limit)
-            for comment in mongodb_comments:
-                comment["_data_source"] = "mongodb"
-            return mongodb_comments
 
     def get_latest_summary(self):
         if self.mongo_db is None:
@@ -613,7 +576,7 @@ class Dashboard:
         st.plotly_chart(fig, use_container_width=True)
 
     def render_recent_comments(self):
-        comments = self.get_hybrid_comments(limit=100)
+        comments = self.get_recent_comments(limit=100)
 
         if not comments:
             st.info("No recent comments available")
@@ -637,16 +600,14 @@ class Dashboard:
             ["timestamp", "username", "comment", "sentiment", "confidence"]
         ].style.map(color_sentiment, subset=["sentiment"])
 
-        st.dataframe(styled_df, height=455, use_container_width=True)
-
+        st.dataframe(styled_df, height=455, use_container_width=True)    
     def render_sentiment_timeline(self):
-        comments = self.get_hybrid_comments(limit=self.data_limit)
+        limit = None if self.data_limit == "All" else self.data_limit
+        comments = self.get_recent_comments(limit=limit)
         if not comments:
             st.info("No data available for sentiment timeline")
             return
 
-        self.render_data_source_info(comments)
-        
         df = pd.DataFrame(comments)
         df["timestamp"] = pd.to_datetime(df["timestamp"])
         df = df.sort_values("timestamp")
@@ -707,10 +668,10 @@ class Dashboard:
             ),
         )
 
-        st.plotly_chart(fig, use_container_width=True)
-
+        st.plotly_chart(fig, use_container_width=True)    
     def render_top_active_users(self):
-        comments = self.get_hybrid_comments(limit=self.data_limit)
+        limit = None if self.data_limit == "All" else self.data_limit
+        comments = self.get_recent_comments(limit=limit)
 
         if not comments:
             st.info("No data available for top active users")
@@ -762,10 +723,11 @@ class Dashboard:
             """,
             unsafe_allow_html=True,
         )
-        st.plotly_chart(fig, use_container_width=True)
-
+        st.plotly_chart(fig, use_container_width=True)    
+    
     def render_trending_words_cloud(self):
-        comments = self.get_hybrid_comments(limit=self.data_limit)
+        limit = None if self.data_limit == "All" else self.data_limit
+        comments = self.get_recent_comments(limit=limit)
 
         if not comments:
             st.info("No data available for word cloud")
@@ -873,7 +835,6 @@ class Dashboard:
                 st.markdown(f"**Published:** {published_date}")
 
     def render_sidebar_system_monitoring(self):
-        """Render system monitoring in sidebar"""
         st.sidebar.header("🖥️ System Monitoring")
         status = self.check_connection_status()
 
@@ -926,7 +887,6 @@ class Dashboard:
                     st.error(f"❌ Error clearing cache: {e}")
 
     def render_latest_summary(self):
-        """Render latest summary section"""
         summary = self.get_latest_summary()
 
         if not summary:
@@ -1025,7 +985,6 @@ class Dashboard:
                 st.info("No sentiment data available for this window")
 
     def render_summary_history(self):
-        """Render summary history section"""
         summaries = self.get_summary_history_from_mongodb()
 
         if not summaries:
@@ -1053,30 +1012,9 @@ class Dashboard:
                 st.text_area(
                     "Summary Content",
                     summary["summary"],
-                    height=200,
-                    disabled=True,
+                    height=200,                disabled=True,
                     key=f"summary_history_{i}_{uuid.uuid4()}",
                 )
-
-    def render_data_source_info(self, comments, chart_title="Analytics"):
-        if not comments:
-            return
-
-        sources = {}
-        for comment in comments:
-            source = comment.get("_data_source", "unknown")
-            sources[source] = sources.get(source, 0) + 1
-
-        if sources:
-            source_info = []
-            for source, count in sources.items():
-                icon = {"redis": "⚡", "mongodb": "🗄️", "unknown": "❓"}.get(
-                    source, "❓"
-                )
-            source_info.append(f"{icon} {source.title()}: {count}")
-
-            info_text = f"**{chart_title} Data Source:** " + " | ".join(source_info)
-            st.caption(info_text)
 
 
 def main():
@@ -1107,22 +1045,32 @@ def main():
             scrollbar-width: inherit;
         }    
     </style>
-    """
+    """    
     st.markdown(css, unsafe_allow_html=True)
     st.sidebar.header("📊 System Preferences")
 
     with st.sidebar.expander("⚙️ Settings", expanded=True):
         auto_refresh = st.checkbox("Auto Refresh", value=True)
         refresh_interval = st.slider("Refresh Interval (seconds)", 3, 10, 3)
-        # data_limit = st.slider("Data Limit for Analytics", 1000, 5000, 1000, step=1000)
-        data_limit = st.selectbox(
-            "📊 Data Limit for Analytics",        
-            options=[1000, 2000, 5000, 10000, 20000],
-            index=0,  # default to 1000
+        
+        
+        data_limit_options = {
+            "500 Comments": 500,
+            "1000 Comments": 1000,
+            "5000 Comments": 5000,
+            "All Data": "All"
+        }
+        
+        data_limit_selection = st.selectbox(
+            "📊 Data Limit for Analytics",
+            options=list(data_limit_options.keys()),
+            index=1,  
+            help="Limit the number of comments used for analytics to improve performance"
         )
+        
+        selected_data_limit = data_limit_options[data_limit_selection]
 
-    # Initialize dashboard with the selected data limit
-    dashboard = Dashboard(data_limit=data_limit)
+    dashboard = Dashboard(data_limit=selected_data_limit)
     dashboard.render_video_info()
     st.divider()
 
@@ -1158,7 +1106,6 @@ def main():
 
         while True:
             current_time = time.time()
-
             with realtime_placeholder.container():
                 st.header("📊 Real-time Metrics")
                 dashboard.render_metrics()

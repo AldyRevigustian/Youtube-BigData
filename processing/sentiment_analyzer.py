@@ -109,7 +109,7 @@ class SentimentAnalyzer:
     def cache_sentiment_result(self, data):
         try:
             key = f"{config.SENTIMENT_CACHE_KEY}:{data['id']}"
-            self.redis_client.setex(key, config.CACHE_EXPIRY_SECONDS, json.dumps(data))
+            self.redis_client.set(key, json.dumps(data))
 
             timestamp = self.parse_iso_timestamp(data["timestamp"])
             self.redis_client.zadd(
@@ -118,7 +118,6 @@ class SentimentAnalyzer:
 
             sentiment_key = f"{config.SENTIMENT_CACHE_KEY}:counts:{data['sentiment']}"
             self.redis_client.incr(sentiment_key)
-            self.redis_client.expire(sentiment_key, config.CACHE_EXPIRY_SECONDS)
 
             logger.info(f"✅ Redis cache updated for comment: {data['id']}")
 
