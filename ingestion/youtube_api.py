@@ -57,6 +57,7 @@ def stream_live_comments(live_chat_id):
                 continue
 
             comment_data = {
+                "id": item["id"],
                 "timestamp": item["snippet"]["publishedAt"],
                 "username": item["authorDetails"]["displayName"],
                 "comment": item["snippet"]["textMessageDetails"]["messageText"],

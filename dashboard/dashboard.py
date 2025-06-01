@@ -4,7 +4,7 @@ import json
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-from datetime import datetime, timedelta
+from datetime import datetime, timezone
 import time
 import sys
 import os
@@ -12,14 +12,9 @@ import requests
 import pymongo
 from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
 import io
-from typing import Dict, Any
-import subprocess
 import psutil
-import numpy as np
-from collections import Counter
 from wordcloud import WordCloud
 import matplotlib.pyplot as plt
-import seaborn as sns
 import re
 import warnings
 import uuid
@@ -31,37 +26,23 @@ from config import config
 
 warnings.filterwarnings("ignore", category=FutureWarning)
 
-
 def safe_parse_timestamp(timestamp_str):
-    try:
-        if not timestamp_str:
-            return datetime.now()
-        timestamp_str = timestamp_str.strip()
-        if "." in timestamp_str:
-            if "+" in timestamp_str:
-                dt_part, tz_part = timestamp_str.rsplit("+", 1)
-                if "." in dt_part:
-                    dt_base, microsec = dt_part.split(".", 1)
-                    microsec = microsec.ljust(6, "0")[:6]
-                    timestamp_str = f"{dt_base}.{microsec}+{tz_part}"
-            elif timestamp_str.endswith("Z"):
-                dt_part = timestamp_str[:-1]
-                if "." in dt_part:
-                    dt_base, microsec = dt_part.split(".", 1)
-                    microsec = microsec.ljust(6, "0")[:6]
-                    timestamp_str = f"{dt_base}.{microsec}Z"
-            else:
-                dt_base, microsec = timestamp_str.split(".", 1)
-                microsec = microsec.ljust(6, "0")[:6]
-                timestamp_str = f"{dt_base}.{microsec}"
-        timestamp_str = timestamp_str.replace("Z", "+00:00")
-        return datetime.fromisoformat(timestamp_str)
-    except Exception as e:
-        st.warning(
-            f"⚠️ Error parsing timestamp '{timestamp_str}': {e}. Using current time."
-        )
+    if not timestamp_str:
         return datetime.now()
+    ts = timestamp_str.strip().replace("Z", "+00:00")
+    match = re.match(r"(.*\.\d{1,6})(.*)", ts)
+    if match:
+        base, rest = match.groups()
+        micro = base.split(".")[1].ljust(6, "0")[:6]
+        base = base.split(".")[0] + "." + micro
+        ts = base + rest
+    return datetime.fromisoformat(ts)
 
+def safe_parse_timestamp_to_local(timestamp_str: str) :
+    dt_utc = safe_parse_timestamp(timestamp_str)
+    if dt_utc.tzinfo is None:
+        dt_utc = dt_utc.replace(tzinfo=timezone.utc)
+    return dt_utc.astimezone()
 
 st.set_page_config(
     page_title="YouTube Live Stream Analytics",
@@ -69,7 +50,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
-
 
 class Dashboard:    
     def __init__(self, data_limit=1000):
@@ -119,7 +99,7 @@ class Dashboard:
                 for comment in comments:
                     try:
                         comment_data = {
-                            "comment_id": comment.get("id", ""),
+                            "id": comment.get("id", ""),
                             "username": comment.get("username", ""),
                             "comment": comment.get("comment", ""),
                             "timestamp": comment.get("timestamp", ""),
@@ -127,7 +107,7 @@ class Dashboard:
                             "confidence": comment.get("confidence", 0.0),
                         }
                         comment_key = (
-                            f"{config.SENTIMENT_CACHE_KEY}:{comment_data['comment_id']}"
+                            f"{config.SENTIMENT_CACHE_KEY}:{comment_data['id']}"
                         )
                         self.redis_client.set(comment_key, json.dumps(comment_data))
 
@@ -136,7 +116,7 @@ class Dashboard:
                         ).timestamp()
                         self.redis_client.zadd(
                             f"{config.SENTIMENT_CACHE_KEY}:timeline",
-                            {comment_data["comment_id"]: timestamp},
+                            {comment_data["id"]: timestamp},
                         )
 
                         sentiment = comment_data["sentiment"].lower()
@@ -147,7 +127,7 @@ class Dashboard:
 
                     except Exception as e:
                         st.warning(
-                            f"⚠️ Error loading comment {comment.get('comment_id', 'unknown')}: {e}"
+                            f"⚠️ Error loading comment {comment.get('id', 'unknown')}: {e}"
                         )
                         continue
 
@@ -431,12 +411,6 @@ class Dashboard:
                     latest_summary["created_at"] = latest_summary[
                         "created_at"
                     ].isoformat()
-                if "processed_at" in latest_summary and hasattr(
-                    latest_summary["processed_at"], "isoformat"
-                ):
-                    latest_summary["processed_at"] = latest_summary[
-                        "processed_at"
-                    ].isoformat()
 
                 return latest_summary
 
@@ -481,9 +455,6 @@ class Dashboard:
                     doc["_id"] = str(doc["_id"])
                 if "created_at" in doc and hasattr(doc["created_at"], "isoformat"):
                     doc["created_at"] = doc["created_at"].isoformat()
-                if "processed_at" in doc and hasattr(doc["processed_at"], "isoformat"):
-                    doc["processed_at"] = doc["processed_at"].isoformat()
-
                 summaries.append(doc)
 
             return summaries
@@ -584,7 +555,7 @@ class Dashboard:
 
         df = pd.DataFrame(comments)
         
-        df["timestamp"] = pd.to_datetime(df["timestamp"]).dt.strftime("%H:%M:%S")
+        df["timestamp"] = df["timestamp"].apply(safe_parse_timestamp_to_local).dt.strftime("%H:%M:%S")
         df["confidence"] = df["confidence"].round(3)
         df["sentiment"] = df["sentiment"].str.title()
 
@@ -931,59 +902,34 @@ class Dashboard:
         )
 
         if "sentiment_distribution" in summary:
-            st.subheader("Sentiment in This Window")
-            sentiment_data = []
+            st.subheader("Sentiment Distribution")
 
-            total_count = 0
+            sentiment_data = []
             sentiment_dist = summary["sentiment_distribution"]
 
-            for sentiment, stats in sentiment_dist.items():
-                if isinstance(stats, dict) and "count" in stats:
-                    total_count += stats["count"]
-                elif isinstance(stats, (int, float)):
-                    total_count += stats
+            total_count = sum(
+                stats["count"] if isinstance(stats, dict) else stats
+                for stats in sentiment_dist.values()
+                if isinstance(stats, (dict, int, float))
+            )
 
             for sentiment, stats in sentiment_dist.items():
-                try:
-                    if isinstance(stats, dict):
-                        count = stats.get("count", 0)
+                if isinstance(stats, dict):
+                    count = stats.get("count", 0)
+                    percentage = stats.get("percentage", (count / total_count * 100) if total_count > 0 else 0)
+                else:
+                    count = stats if isinstance(stats, (int, float)) else 0
+                    percentage = (count / total_count * 100) if total_count > 0 else 0
 
-                        if "percentage" in stats:
-                            percentage = stats["percentage"]
-                        else:
-                            percentage = (
-                                (count / total_count * 100) if total_count > 0 else 0
-                            )
-                    else:
-
-                        count = stats if isinstance(stats, (int, float)) else 0
-                        percentage = (
-                            (count / total_count * 100) if total_count > 0 else 0
-                        )
-
-                    sentiment_data.append(
-                        {
-                            "Sentiment": sentiment.title(),
-                            "Count": count,
-                            "Percentage": f"{percentage:.1f}%",
-                        }
-                    )
-                except Exception as e:
-                    st.warning(f"Error processing sentiment data for {sentiment}: {e}")
-
-                    sentiment_data.append(
-                        {
-                            "Sentiment": sentiment.title(),
-                            "Count": 0,
-                            "Percentage": "0.0%",
-                        }
-                    )
+                sentiment_data.append({
+                    "Sentiment": sentiment.title(),
+                    "Count": count,
+                    "Percentage": f"{percentage:.1f}%",
+                })
 
             if sentiment_data:
                 df_sentiment = pd.DataFrame(sentiment_data)
                 st.dataframe(df_sentiment, use_container_width=True)
-            else:
-                st.info("No sentiment data available for this window")
 
     def render_summary_history(self):
         summaries = self.get_summary_history_from_mongodb()
@@ -1001,8 +947,7 @@ class Dashboard:
 
         for i, summary in enumerate(summaries):
             with st.expander(
-                f"📋 Summary #{len(summaries) - i} - {safe_parse_timestamp(summary['window_start']).strftime('%H:%M')} to {safe_parse_timestamp(summary['window_end']).strftime('%H:%M')}",
-                expanded=(i == 0),
+                f"📋 Summary #{len(summaries) - i} - {safe_parse_timestamp(summary['window_start']).strftime('%H:%M')} to {safe_parse_timestamp(summary['window_end']).strftime('%H:%M')}"
             ):
                 col1, col2 = st.columns(2)
                 with col1:
@@ -1013,10 +958,39 @@ class Dashboard:
                 st.text_area(
                     "Summary Content",
                     summary["summary"],
-                    height=200,                disabled=True,
+                    height=400,                
+                    disabled=True,
                     key=f"summary_history_{i}_{uuid.uuid4()}",
                 )
+                if "sentiment_distribution" in summary:
+                    st.subheader("Sentiment Distribution")
 
+                    sentiment_data = []
+                    sentiment_dist = summary["sentiment_distribution"]
+
+                    total_count = sum(
+                        stats["count"] if isinstance(stats, dict) else stats
+                        for stats in sentiment_dist.values()
+                        if isinstance(stats, (dict, int, float))
+                    )
+
+                    for sentiment, stats in sentiment_dist.items():
+                        if isinstance(stats, dict):
+                            count = stats.get("count", 0)
+                            percentage = stats.get("percentage", (count / total_count * 100) if total_count > 0 else 0)
+                        else:
+                            count = stats if isinstance(stats, (int, float)) else 0
+                            percentage = (count / total_count * 100) if total_count > 0 else 0
+
+                        sentiment_data.append({
+                            "Sentiment": sentiment.title(),
+                            "Count": count,
+                            "Percentage": f"{percentage:.1f}%",
+                        })
+
+                    if sentiment_data:
+                        df_sentiment = pd.DataFrame(sentiment_data)
+                        st.dataframe(df_sentiment, use_container_width=True)
 
 def main():
     svg_icon = """
@@ -1053,7 +1027,6 @@ def main():
     with st.sidebar.expander("⚙️ Settings", expanded=True):
         auto_refresh = st.checkbox("Auto Refresh", value=True)
         refresh_interval = st.slider("Refresh Interval (seconds)", 3, 10, 3)
-        
         
         data_limit_options = {
             "500 Comments": 500,

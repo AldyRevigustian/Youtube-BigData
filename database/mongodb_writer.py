@@ -18,7 +18,6 @@ from config.config import (
     VIDEO_ID
 )
 
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -65,13 +64,10 @@ class MongoDBWriter:
             collection_name = f"{video_id}_comments"
             collection = self.db[collection_name]
             
-            
             document = {
                 **comment_data,
                 'created_at': datetime.utcnow(),
-                'processed_at': datetime.utcnow()
             }
-            
             
             result = await collection.insert_one(document)
             logger.info(f"✅ Comment written to MongoDB: {result.inserted_id}")
@@ -91,13 +87,10 @@ class MongoDBWriter:
             collection_name = f"{video_id}_summaries"
             collection = self.db[collection_name]
             
-            
             document = {
                 **summary_data,
                 'created_at': datetime.utcnow(),
-                'processed_at': datetime.utcnow()
             }
-            
             
             result = await collection.insert_one(document)
             logger.info(f"✅ Summary written to MongoDB: {result.inserted_id}")
@@ -125,13 +118,11 @@ class MongoDBWriter:
                 
             collection = self.db[collection_name]
             
-            
             documents = []
             for data in data_batch:
                 document = {
                     **data,
                     'created_at': datetime.utcnow(),
-                    'processed_at': datetime.utcnow()
                 }
                 documents.append(document)
             
@@ -150,14 +141,11 @@ class MongoDBWriter:
             
         try:
             video_id = VIDEO_ID
-            
-            
             comments_collection = self.db[f"{video_id}_comments"]
             await comments_collection.create_index("timestamp")
             await comments_collection.create_index("sentiment")
             await comments_collection.create_index("video_id")
             await comments_collection.create_index([("timestamp", -1), ("sentiment", 1)])
-            
             
             summaries_collection = self.db[f"{video_id}_summaries"]
             await summaries_collection.create_index("window_start")
@@ -170,7 +158,6 @@ class MongoDBWriter:
         except Exception as e:
             logger.error(f"❌ Error creating indexes: {e}")
             return False
-
 
 mongodb_writer = MongoDBWriter()
 
@@ -198,7 +185,6 @@ def write_to_mongodb_background(data: Dict[str, Any], data_type: str = 'comment'
                     
             except Exception as e:
                 logger.error(f"Error in background MongoDB write thread: {e}")
-        
         
         thread = threading.Thread(target=run_sync_write, daemon=True)
         thread.start()
@@ -246,9 +232,7 @@ class SyncMongoDBWriter:
             document = {
                 **comment_data,
                 'created_at': datetime.utcnow(),
-                'processed_at': datetime.utcnow()
             }
-            
             
             result = collection.insert_one(document)
             logger.info(f"✅ Comment written to MongoDB: {result.inserted_id}")
@@ -268,13 +252,10 @@ class SyncMongoDBWriter:
             collection_name = f"{video_id}_summaries"
             collection = self.db[collection_name]
             
-            
             document = {
                 **summary_data,
                 'created_at': datetime.utcnow(),
-                'processed_at': datetime.utcnow()
             }
-            
             
             result = collection.insert_one(document)
             logger.info(f"✅ Summary written to MongoDB: {result.inserted_id}")
@@ -303,7 +284,6 @@ if __name__ == "__main__":
     async def test_writer():
         await initialize_mongodb()
         
-        
         test_comment = {
             'timestamp': datetime.utcnow().isoformat(),
             'username': 'test_user',
@@ -313,7 +293,6 @@ if __name__ == "__main__":
         }
         
         await write_to_mongodb_async(test_comment, 'comment')
-        
         
         test_summary = {
             'window_start': datetime.utcnow().isoformat(),
@@ -325,7 +304,6 @@ if __name__ == "__main__":
         }
         
         await write_to_mongodb_async(test_summary, 'summary')
-        
         await mongodb_writer.disconnect()
     
     asyncio.run(test_writer())

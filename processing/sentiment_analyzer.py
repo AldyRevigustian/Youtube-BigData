@@ -76,18 +76,15 @@ class SentimentAnalyzer:
                 sentiment, confidence = self.analyze_sentiment(comment_data["comment"])
 
                 enriched_data = {
-                    "id": f"{comment_data['username']}_{comment_data['timestamp']}",
+                    "id": comment_data["id"],
                     "timestamp": comment_data["timestamp"],
                     "username": comment_data["username"],
                     "comment": comment_data["comment"],
                     "video_id": comment_data["video_id"],
                     "sentiment": sentiment,
                     "confidence": confidence,
-                    "processed_at": datetime.now().isoformat(),
                 }
-
                 self.producer.send(config.SENTIMENT_RESULTS_TOPIC, value=enriched_data)
-
                 self.cache_sentiment_result(enriched_data)
 
                 logger.info(
