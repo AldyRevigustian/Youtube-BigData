@@ -1,12 +1,13 @@
-import json
-import redis
-from transformers import pipeline
+from transformers import AutoTokenizer, AutoModelForSequenceClassification, pipeline
 from kafka import KafkaConsumer, KafkaProducer
+from transformers import pipeline
 from datetime import datetime
 import logging
+import torch
+import redis
+import json
 import sys
 import os
-import asyncio
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import config
@@ -20,9 +21,12 @@ logger = logging.getLogger(__name__)
 class SentimentAnalyzer:
     def __init__(self):
         logger.info("Loading sentiment analysis model...")
-        self.sentiment_pipeline = pipeline(
-            "sentiment-analysis", model=config.SENTIMENT_MODEL, return_all_scores=True
-        )
+        if config.IS_INDONESIAN:
+            model_name = config.INDONESIAN_SENTIMENT_MODEL
+        else:   
+            model_name = config.SENTIMENT_MODEL
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.model = AutoModelForSequenceClassification.from_pretrained(model_name)
 
         self.redis_client = redis.Redis(
             host=config.REDIS_HOST,
@@ -47,21 +51,19 @@ class SentimentAnalyzer:
 
     def analyze_sentiment(self, text):
         try:
-            results = self.sentiment_pipeline(text)
-
-            best_result = max(results[0], key=lambda x: x["score"])
-
-            label_mapping = {
-                "POSITIVE": "positive",
-                "NEGATIVE": "negative",
-                "NEUTRAL": "neutral",
-            }
-
-            sentiment = label_mapping.get(best_result["label"].upper(), "neutral")
-            confidence = best_result["score"]
-
-            return sentiment, confidence
-
+            inputs = self.tokenizer(text, return_tensors="pt", truncation=True, padding=True, max_length=512)
+            with torch.no_grad():
+                outputs = self.model(**inputs)
+            probabilities = torch.nn.functional.softmax(outputs.logits, dim=-1)
+            predictions = torch.argmax(probabilities, dim=-1)
+            scores = torch.max(probabilities, dim=-1).values
+            if config.IS_INDONESIAN:
+                sentiment_map = {0: "positive", 1: "neutral", 2: "negative"}
+            else:
+                sentiment_map = {0: "negative",1: "negative",2: "neutral", 3: "positive",4: "positive"}
+            pred = predictions.item()
+            confidence = scores.item()
+            return sentiment_map[pred], confidence
         except Exception as e:
             logger.error(f"Error analyzing sentiment: {e}")
             return "neutral", 0.0
@@ -72,9 +74,7 @@ class SentimentAnalyzer:
         for message in self.consumer:
             try:
                 comment_data = message.value
-
                 sentiment, confidence = self.analyze_sentiment(comment_data["comment"])
-
                 enriched_data = {
                     "id": comment_data["id"],
                     "timestamp": comment_data["timestamp"],

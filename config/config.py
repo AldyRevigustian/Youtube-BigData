@@ -9,7 +9,8 @@
 # YOUTUBE_API_KEY = "AIzaSyBT48ooU4fAYwgUREVe0IyXA4VL6n9QsNY"
 YOUTUBE_API_KEY = "AIzaSyDb4mmFfCigrnP1L5bcEMtfW1Qdh6UlOjw"
 
-VIDEO_ID = "OBdh-LVCbFA"
+IS_INDONESIAN = True  # Set to True for Indonesian comments, False for English comments
+VIDEO_ID = "Jo9SUe9qvvs"
 
 # Kafka Configuration
 KAFKA_BOOTSTRAP_SERVERS = "localhost:9092"
@@ -35,6 +36,8 @@ GEMINI_API_KEY = "AIzaSyAhb8kIfY6VGPbDq80oI-OoD688TGN0wOI"
 
 # Model Configuration
 SENTIMENT_MODEL = "tabularisai/multilingual-sentiment-analysis"
+# INDONESIAN_SENTIMENT_MODEL = "cahya/distilbert-base-indonesian"
+INDONESIAN_SENTIMENT_MODEL = "indo-bert2"
 
 # Timing Configuration
 SUMMARY_WINDOW_MINUTES = 3
