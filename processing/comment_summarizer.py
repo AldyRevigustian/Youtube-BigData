@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 class CommentSummarizer:
-    def __init__(self):
+    def __init__(self, max_retries=3, retry_delay=2):
         self.gemini_client = genai.Client(api_key=config.GEMINI_API_KEY)
         self.consumer = KafkaConsumer(
             config.SENTIMENT_RESULTS_TOPIC,
@@ -29,6 +29,8 @@ class CommentSummarizer:
             group_id="comment-summarizer",
         )
         self.comment_buffer = []
+        self.max_retries = max_retries
+        self.retry_delay = retry_delay
         logger.info("Comment Summarizer initialized successfully")
 
     def collect_comments(self):
@@ -161,14 +163,15 @@ class CommentSummarizer:
         }
 
     def _generate_gemini_summary(self, comment_texts, stats):
-        try:
-            max_comments = 2000
-            if len(comment_texts) > max_comments:
-                comment_texts = comment_texts[:max_comments]
+        for attempt in range(self.max_retries):
+            try:
+                max_comments = 2000
+                if len(comment_texts) > max_comments:
+                    comment_texts = comment_texts[:max_comments]
 
-            comments_str = "\n".join(comment_texts)
+                comments_str = "\n".join(comment_texts)
 
-            prompt = f"""
+                prompt = f"""
 Berikut ini adalah data hasil analisis komentar dari live streaming YouTube:
 
 Statistik Sentimen:
@@ -194,65 +197,51 @@ Struktur ringkasan harus mencakup lima aspek berikut ini:
 Gunakan bahasa Indonesia yang lugas dan mudah dipahami. Panjang ringkasan maksimal 300 kata. Tulis ringkasan dengan gaya deskriptif yang konsisten dan rapi agar mudah dianalisis lebih lanjut.
 """
 
-            #             prompt = f"""
-            # Analisis dan buatkan ringkasan dari komentar YouTube live streaming berikut dengan FORMAT TETAP:
+                response = self.gemini_client.models.generate_content(
+                    model="gemini-2.0-flash", contents=prompt
+                )
 
-            # === DATA STATISTIK ===
-            # - Positif: {stats['positive']} ({stats.get('positive_pct', 0):.1f}%)
-            # - Negatif: {stats['negative']} ({stats.get('negative_pct', 0):.1f}%)
-            # - Netral: {stats['neutral']} ({stats.get('neutral_pct', 0):.1f}%)
-            # Total Komentar: {len(comment_texts)}
+                if response and hasattr(response, "text"):
+                    logger.info(f"Gemini API call successful on attempt {attempt + 1}")
+                    return response.text.strip()
+                else:
+                    logger.warning(f"No valid response from Gemini API on attempt {attempt + 1}")
+                    if attempt == self.max_retries - 1:
+                        logger.error("All Gemini API attempts failed, using fallback summary")
+                        return self._fallback_summary(stats)
 
-            # === KOMENTAR ===
-            # {comments_str}
+            except genai.errors.ServerError as e:
+                if "503" in str(e) and "overloaded" in str(e).lower():
+                    logger.warning(f"Gemini API overloaded (attempt {attempt + 1}/{self.max_retries}): {e}")
+                    if attempt < self.max_retries - 1:
+                        wait_time = self.retry_delay * (2 ** attempt)  
+                        logger.info(f"Retrying in {wait_time} seconds...")
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        logger.error("Max retries reached for Gemini API, using fallback summary")
+                        return self._fallback_summary(stats)
+                else:
+                    logger.error(f"Non-recoverable Gemini API error: {e}")
+                    return self._fallback_summary(stats)
+            except Exception as e:
+                logger.error(f"Unexpected error calling Gemini API (attempt {attempt + 1}): {e}")
+                if attempt == self.max_retries - 1:
+                    logger.error("All attempts failed, using fallback summary")
+                    return self._fallback_summary(stats)
+                else:
+                    wait_time = self.retry_delay * (2 ** attempt)
+                    logger.info(f"Retrying in {wait_time} seconds...")
+                    time.sleep(wait_time)
 
-            # INSTRUKSI ANALISIS (WAJIB DIIKUTI):
-            # Buatlah ringkasan dengan struktur TEPAT seperti ini:
-
-            # ## RINGKASAN ANALISIS KOMENTAR YOUTUBE
-
-            # ### 1. GAMBARAN SENTIMEN
-            # [Jelaskan dominasi sentimen berdasarkan persentase tertinggi - apakah mayoritas positif/negatif/netral. Maksimal 2 kalimat.]
-
-            # ### 2. TOPIK UTAMA DISKUSI
-            # [Sebutkan 3-5 topik utama yang paling sering dibahas penonton. Format: bullet point dengan penjelasan singkat.]
-
-            # ### 3. KOMENTAR HIGHLIGHT
-            # [Pilih 2-3 komentar paling representatif/menarik. Kutip langsung dan jelaskan mengapa penting. Format: "Komentar: [kutipan]" - Alasan: [penjelasan]]
-
-            # ### 4. MOOD DAN REAKSI AUDIENS
-            # [Deskripsikan suasana hati umum penonton dan reaksi mereka terhadap konten. Maksimal 3 kalimat.]
-
-            # ### 5. POLA INTERAKSI
-            # [Identifikasi tren komunikasi, frekuensi komentar, atau pola perilaku yang terlihat. Maksimal 2 kalimat.]
-
-            # KETENTUAN WAJIB:
-            # - Gunakan struktur heading dan subheading persis seperti contoh
-            # - Setiap bagian maksimal sesuai batasan yang ditentukan
-            # - Total ringkasan maksimal 300 kata
-            # - Gunakan bahasa Indonesia formal namun mudah dipahami
-            # - Jangan tambah atau kurangi bagian struktur
-            # - Gunakan data statistik sebagai dasar analisis
-            # - Fokus pada fakta objektif, hindari asumsi berlebihan
-            # """
-            response = self.gemini_client.models.generate_content(
-                model="gemini-2.0-flash", contents=prompt
-            )
-
-            if response and hasattr(response, "text"):
-                return response.text.strip()
-            else:
-                return self._fallback_summary(stats)
-
-        except Exception as e:
-            logger.error(f"Error calling Gemini API: {e}")
-            return self._fallback_summary(stats)
+        return self._fallback_summary(stats)
 
     def _fallback_summary(self, stats):
         total_comments = stats["positive"] + stats["negative"] + stats["neutral"]
 
         if total_comments == 0:
             return "Tidak ada komentar untuk diringkas dalam periode ini."
+        
         dominant_sentiment = "netral"
         max_count = stats["neutral"]
 
@@ -285,8 +274,7 @@ Tingkat engagement cukup {'tinggi' if total_comments > 50 else 'sedang'} dengan 
 
 if __name__ == "__main__":
     import threading
-
-    summarizer = CommentSummarizer()
+    summarizer = CommentSummarizer(max_retries=3, retry_delay=2)
 
     collection_thread = threading.Thread(
         target=summarizer.collect_comments, daemon=True
