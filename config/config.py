@@ -10,7 +10,7 @@ YOUTUBE_API_KEY = "AIzaSyA-nKO01fRryKtTyhpuLjrAFD1TRTjCVzg"
 # YOUTUBE_API_KEY = "AIzaSyDb4mmFfCigrnP1L5bcEMtfW1Qdh6UlOjw"
 
 IS_INDONESIAN = True  # Set to True for Indonesian comments
-VIDEO_ID = "Jo9SUe9qvvs"
+VIDEO_ID = "TDB0N5P3ES4"
 
 # Kafka Configuration
 KAFKA_BOOTSTRAP_SERVERS = "localhost:9092"
