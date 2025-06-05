@@ -1,15 +1,15 @@
 # YouTube API Configuration
 
-# YOUTUBE_API_KEY = "AIzaSyA-nKO01fRryKtTyhpuLjrAFD1TRTjCVzg"
+YOUTUBE_API_KEY = "AIzaSyA-nKO01fRryKtTyhpuLjrAFD1TRTjCVzg"
 # YOUTUBE_API_KEY = "AIzaSyBrFCli-COaOMMoKFkBIt1TuNNOdvqzlcU"
 # YOUTUBE_API_KEY = "AIzaSyBUSqmcjVkT9xFprzMao8U_Q5215JnQR8o"
 # YOUTUBE_API_KEY = "AIzaSyB0FjKXHdc53vjA4LFR_921ngDhUF-Q9b0"
 # YOUTUBE_API_KEY = "AIzaSyDG3CDIL2jQQcquqTG-QSe5Dm6xrS0hVks"
 # YOUTUBE_API_KEY = "AIzaSyDoMVREIBSPmZwKgFxDAQfvHBurQ6AUb1Y"
 # YOUTUBE_API_KEY = "AIzaSyBT48ooU4fAYwgUREVe0IyXA4VL6n9QsNY"
-YOUTUBE_API_KEY = "AIzaSyDb4mmFfCigrnP1L5bcEMtfW1Qdh6UlOjw"
+# YOUTUBE_API_KEY = "AIzaSyDb4mmFfCigrnP1L5bcEMtfW1Qdh6UlOjw"
 
-IS_INDONESIAN = True  # Set to True for Indonesian comments, False for English comments
+IS_INDONESIAN = True  # Set to True for Indonesian comments
 VIDEO_ID = "Jo9SUe9qvvs"
 
 # Kafka Configuration
