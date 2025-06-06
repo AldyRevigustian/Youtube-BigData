@@ -249,18 +249,6 @@ class ServiceManager:
                 hasattr(sys, "base_prefix") and sys.base_prefix != sys.prefix
             )
 
-            if not in_venv:
-                self.print_colored(
-                    "💡 Tip: Consider using a virtual environment:", Colors.CYAN
-                )
-                if self.platform == "windows":
-                    self.print_colored("   python -m venv venv", Colors.WHITE)
-                    self.print_colored("   venv\\Scripts\\activate", Colors.WHITE)
-                else:
-                    self.print_colored("   python3 -m venv venv", Colors.WHITE)
-                    self.print_colored("   source venv/bin/activate", Colors.WHITE)
-                self.print_colored("   pip install -r requirements.txt", Colors.WHITE)
-
         return True
 
     def start_system(self):

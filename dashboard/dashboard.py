@@ -580,7 +580,7 @@ class Dashboard:
             return
 
         df = pd.DataFrame(comments)
-        df["timestamp"] = pd.to_datetime(df["timestamp"])
+        df["timestamp"] = df["timestamp"].apply(safe_parse_timestamp_to_local)
         df = df.sort_values("timestamp")
 
         df["time_group"] = df["timestamp"].dt.floor("300s")
